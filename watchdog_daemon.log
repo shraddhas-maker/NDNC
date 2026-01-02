@@ -1,0 +1,17 @@
+[2025-12-31 13:01:51] ========================================
+[2025-12-31 13:01:51] NDNC Watchdog Daemon Starting
+[2025-12-31 13:01:51] ========================================
+[2025-12-31 13:01:51] Log file: /Users/shraddha.s/Desktop/watchdog_automation/watchdog_daemon.log
+[2025-12-31 13:01:51] PID file: /Users/shraddha.s/Desktop/watchdog_automation/watchdog_daemon.pid
+[2025-12-31 13:01:51] Press Ctrl+C to stop the daemon
+[2025-12-31 13:01:51] ========================================
+[2025-12-31 13:01:51] Watchdog is not running. Starting...
+[2025-12-31 13:01:51] Starting NDNC Watchdog...
+[2025-12-31 13:01:51] Watchdog started with PID: 47605
+
+============================================================
+Starting NDNC Watchdog Automation
+============================================================
+
+[2025-12-31 13:04:36] Daemon stopping...
+[2025-12-31 13:04:36] Stopping watchdog (PID: 47605)...
