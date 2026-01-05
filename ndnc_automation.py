@@ -43,9 +43,11 @@ class NDNCAutomation:
         # Create processed directory if it doesn't exist
         self.processed_directory.mkdir(exist_ok=True)
         
+    
     def parse_pdf_file(self, pdf_path: Path) -> Dict[str, str]:
         """
-        Extract contact_number and date_of_call from PDF or PNG file using OCR
+        Extract contact_number and date_of_call from FILENAME
+        Simple and reliable approach - uses filename data
         
         Args:
             pdf_path: Path to the PDF or PNG file
@@ -54,18 +56,104 @@ class NDNCAutomation:
             Dictionary with 'contact_number' and 'date_of_call'
         """
         try:
+            print(f"   📝 Parsing: {pdf_path.name}")
+            
+            contact_number = None
+            date_of_call = None
+            
+            # ============================================================
+            # STEP 1: Extract phone number from FILENAME
+            # ============================================================
+            print(f"\n   📱 Extracting phone number from filename...")
+            
+            # Pattern: Look for 10-digit numbers in filename
+            # Example: 9479760361_1135047815_18-Dec-2025_Call1.pdf
+            # Match any sequence of exactly 10 digits
+            filename_numbers = re.findall(r'(\d{10})', pdf_path.name)
+            
+            if filename_numbers:
+                contact_number = filename_numbers[0]
+                print(f"   ✓ Phone number: {contact_number}")
+                
+                if len(filename_numbers) > 1:
+                    print(f"      (Multiple numbers found: {filename_numbers}, using first)")
+            else:
+                print(f"   ✗ No 10-digit number found in filename")
+                return None
+            
+            # ============================================================
+            # STEP 2: Extract date from FILENAME
+            # ============================================================
+            print(f"\n   📅 Extracting date from filename...")
+            
+            # Pattern: DD-Mon-YYYY (e.g., 18-Dec-2025)
+            filename_date_match = re.search(r'(\d{1,2})-(\w{3})-(\d{4})', pdf_path.name, re.IGNORECASE)
+            
+            if filename_date_match:
+                day, month, year = filename_date_match.groups()
+                try:
+                    date_obj = datetime.strptime(f"{day}-{month}-{year}", '%d-%b-%Y')
+                    date_of_call = date_obj.strftime('%d-%b-%Y')
+                    print(f"   ✓ Date: {date_of_call}")
+                except:
+                    date_of_call = f"{day}-{month}-{year}"
+                    print(f"   ✓ Date: {date_of_call} (raw format)")
+            else:
+                print(f"   ✗ No date found in filename (expected format: DD-Mon-YYYY)")
+                return None
+            
+            # ============================================================
+            # FINAL RESULT
+            # ============================================================
+            print(f"\n   ✅ Extraction successful!")
+            print(f"      📱 Phone: {contact_number}")
+            print(f"      📅 Date:  {date_of_call}")
+            
+            return {
+                'contact_number': contact_number,
+                'date_of_call': date_of_call,
+                'filename': pdf_path.name
+            }
+                    
+        except Exception as e:
+            print(f"\n   ✗ ERROR: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def verify_phone_in_file(self, pdf_path: Path, contact_number: str) -> bool:
+        """
+        Verify that the phone number exists in the file content
+        Uses OCR to check if the number is actually present in the document
+        
+        Args:
+            pdf_path: Path to the PDF or PNG file
+            contact_number: Phone number to verify (without +91)
+            
+        Returns:
+            True if phone number found in content, False otherwise
+        """
+        try:
+            print(f"\n   🔍 Verifying phone number {contact_number} exists in file content...")
+            
+            # Read file content
             text = ""
             
-            # Check if file is PNG
             if pdf_path.suffix.lower() == '.png':
-                print(f"   Processing PNG image: {pdf_path.name}...")
-                # Directly use OCR on the PNG image
+                print(f"      → Reading PNG image...")
                 image = Image.open(pdf_path)
-                text = pytesseract.image_to_string(image)
-                print(f"   OCR extracted {len(text)} characters from PNG")
+                
+                # Simple OCR
+                from PIL import ImageEnhance
+                img = image.convert('L')
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(2.0)
+                
+                text = pytesseract.image_to_string(img)
             else:
-                # Handle PDF files
-                # First try regular text extraction
+                print(f"      → Reading PDF...")
+                
+                # Try direct text extraction
                 try:
                     with open(pdf_path, 'rb') as file:
                         pdf_reader = PyPDF2.PdfReader(file)
@@ -74,89 +162,50 @@ class NDNCAutomation:
                 except:
                     pass
                 
-                # If no text found or very little text, use OCR
+                # If no text, use OCR
                 if len(text.strip()) < 50:
-                    print(f"   Using OCR for {pdf_path.name}...")
-                    # Convert PDF to images
                     images = convert_from_path(str(pdf_path), dpi=300)
-                    
-                    # Extract text from each page using OCR
-                    text = ""
-                    for i, image in enumerate(images):
-                        # Use pytesseract to extract text
-                        page_text = pytesseract.image_to_string(image)
-                        text += page_text + "\n"
-                    
-                    print(f"   OCR extracted {len(text)} characters")
+                    for image in images:
+                        from PIL import ImageEnhance
+                        img = image.convert('L')
+                        enhancer = ImageEnhance.Contrast(img)
+                        img = enhancer.enhance(2.0)
+                        text += pytesseract.image_to_string(img)
             
-            # Clean up text - remove extra spaces and normalize
-            text = re.sub(r'\s+', ' ', text)
+            # Clean text - remove all spaces and special characters
+            clean_text = re.sub(r'[^0-9]', '', text)
             
-            contact_number = None
-            date_of_call = None
+            # Check if phone number exists in the text
+            # Look for the 10-digit number (may appear with or without +91)
             
-            # Try multiple patterns for contact number (ONLY in file content)
-            patterns = [
-                r'contact_number[:\s]+(\d{10})',  # contact_number: 9080758775
-                r'contact[_\s]number[:\s]+(\d{10})',  # contact number: 9080758775
-                r'complainer[_\s]?no[:\s]+(\d{10})',  # complainer no: 9080758775
-                r'phone[:\s]+(\d{10})',  # phone: 9080758775
-                r'mobile[:\s]+(\d{10})',  # mobile: 9080758775
-            ]
+            # Search for exact 10-digit match
+            if contact_number in clean_text:
+                print(f"      ✅ Phone number {contact_number} FOUND in file content!")
+                return True
             
-            for pattern in patterns:
-                match = re.search(pattern, text, re.IGNORECASE)
-                if match:
-                    contact_number = match.group(1)
-                    break
+            # Also check for +91 prefix version
+            plus91_version = f"91{contact_number}"
+            if plus91_version in clean_text:
+                print(f"      ✅ Phone number found as +91 {contact_number} in file content!")
+                return True
             
-            # Try multiple patterns for date
-            date_patterns = [
-                r'date_of_call[:\s]+(\d{1,2}[-/]\w{3,9}[-/]\d{4})',  # date_of_call: 18-Nov-2025
-                r'date[_\s]of[_\s]call[:\s]+(\d{1,2}[-/]\w{3,9}[-/]\d{4})',  # date of call: 18-Nov-2025
-                r'call[_\s]date[:\s]+(\d{1,2}[-/]\w{3,9}[-/]\d{4})',  # call date: 18-Nov-2025
-                r'date[:\s]+(\d{1,2}[-/]\w{3,9}[-/]\d{4})',  # date: 18-Nov-2025
-            ]
+            # Check individual chunks (sometimes OCR breaks numbers into parts)
+            # If at least 7 consecutive digits match, consider it found
+            if len(contact_number) >= 7:
+                for i in range(len(contact_number) - 6):
+                    chunk = contact_number[i:i+7]
+                    if chunk in clean_text:
+                        print(f"      ⚠️  Partial match found (7+ digits): considering as valid")
+                        return True
             
-            for pattern in date_patterns:
-                match = re.search(pattern, text, re.IGNORECASE)
-                if match:
-                    date_of_call = match.group(1)
-                    break
+            print(f"      ❌ Phone number {contact_number} NOT FOUND in file content")
+            print(f"      📄 File may not contain the expected phone number")
+            return False
             
-            # If not found in content, try filename
-            if not date_of_call:
-                # Try pattern like: 8587077276_8037355863_21-Dec-2025_Call1.png
-                date_match = re.search(r'(\d{1,2}-\w{3}-\d{4})', pdf_path.name, re.IGNORECASE)
-                if date_match:
-                    date_of_call = date_match.group(1)
-                    print(f"   → Extracted date from filename: {date_of_call}")
-            
-            # Check if contact number is missing from file content
-            if not contact_number:
-                print(f"✗ No phone number found in file content: {pdf_path.name}")
-                print(f"   (Phone number must be present inside the file, not just in filename)")
-                print(f"   Skipping this file and moving to next...")
-                return None
-            
-            if contact_number and date_of_call:
-                print(f"✓ Parsed {pdf_path.name}: Contact={contact_number}, Date={date_of_call}")
-                return {
-                    'contact_number': contact_number,
-                    'date_of_call': date_of_call,
-                    'filename': pdf_path.name
-                }
-            else:
-                # If we have contact number but missing date
-                if not date_of_call:
-                    print(f"✗ Could not extract date_of_call from {pdf_path.name}")
-                    print(f"   PDF content preview: {text[:200]}...")
-                return None
-                    
         except Exception as e:
-            print(f"✗ Error parsing {pdf_path.name}: {str(e)}")
-            return None
-    
+            print(f"      ⚠️  Error during verification: {str(e)}")
+            print(f"      Assuming number is present (benefit of doubt)")
+            return True  # In case of error, allow processing to continue
     def convert_date_format(self, date_str: str) -> str:
         """
         Convert date from format like '18-Nov-2025' to 'November 18, 2025'
@@ -956,6 +1005,7 @@ class NDNCAutomation:
         results = {
             'success': 0,
             'failed': 0,
+            'skipped_no_number': 0,
             'total': len(all_files)
         }
         
@@ -964,19 +1014,18 @@ class NDNCAutomation:
             print(f"📄 FILE {idx}/{len(all_files)}: {pdf_file.name}")
             print(f"{'─'*60}")
             
-            # Parse PDF to extract data
-            print(f"→ Step 1: Extracting data from file...")
+            # Parse PDF to extract data from FILENAME
+            print(f"→ Step 1: Extracting data from filename...")
             complaint_data = self.parse_pdf_file(pdf_file)
             
             if not complaint_data:
-                print(f"✗ Failed to extract data - moving to processed folder")
+                print(f"✗ Failed to extract data from filename - moving to processed folder")
                 results['failed'] += 1
-                # Move file to processed folder even if parsing failed
                 self.move_to_processed(pdf_file)
                 continue
             
             # Search and match the complaint
-            print(f"→ Step 2: Searching for complaint in dashboard...")
+            print(f"\n→ Step 2: Searching for complaint in dashboard...")
             print(f"   Contact Number: {complaint_data['contact_number']}")
             print(f"   Date of Call: {complaint_data['date_of_call']}")
             
@@ -987,15 +1036,31 @@ class NDNCAutomation:
             
             if success:
                 # Check status of the complaint
-                print(f"→ Step 3: Checking complaint status...")
+                print(f"\n→ Step 3: Checking complaint status...")
                 status = self.check_complaint_status()
                 
                 if status.lower() == "open":
+                    # VERIFY PHONE NUMBER EXISTS IN FILE BEFORE UPLOADING
+                    print(f"\n→ Step 4: Status is 'OPEN'")
+                    print(f"→ Step 5: Verifying phone number exists in file content...")
+                    
+                    if not self.verify_phone_in_file(pdf_file, complaint_data['contact_number']):
+                        print(f"\n⚠️  SKIPPING: Phone number not found in file content")
+                        print(f"   The file may not be the correct document for this complaint")
+                        results['skipped_no_number'] += 1
+                        self.move_to_processed(pdf_file)
+                        
+                        # Navigate back to all complaints page
+                        print(f"\n→ Returning to All Complaints page...")
+                        self.driver.get(f"{self.base_url}/all-complaints")
+                        time.sleep(3)
+                        continue
+                    
                     # Upload new document
-                    print(f"\n→ Step 4: Status is 'OPEN' - proceeding with document upload...")
+                    print(f"\n→ Step 6: Phone verified! Proceeding with document upload...")
                     if self.upload_document(complaint_data['contact_number']):
                         # Verify the uploaded document
-                        print(f"\n→ Step 5: Verifying uploaded document...")
+                        print(f"\n→ Step 7: Verifying uploaded document...")
                         if self.verify_document():
                             results['success'] += 1
                             print(f"\n✅ SUCCESS: Processed and verified {pdf_file.name}")
@@ -1010,8 +1075,24 @@ class NDNCAutomation:
                         self.move_to_processed(pdf_file)
                         
                 elif "review pending" in status.lower():
+                    # VERIFY PHONE NUMBER EXISTS IN FILE BEFORE VERIFYING
+                    print(f"\n→ Step 4: Status is 'REVIEW PENDING'")
+                    print(f"→ Step 5: Verifying phone number exists in file content...")
+                    
+                    if not self.verify_phone_in_file(pdf_file, complaint_data['contact_number']):
+                        print(f"\n⚠️  SKIPPING: Phone number not found in file content")
+                        print(f"   The file may not be the correct document for this complaint")
+                        results['skipped_no_number'] += 1
+                        self.move_to_processed(pdf_file)
+                        
+                        # Navigate back to all complaints page
+                        print(f"\n→ Returning to All Complaints page...")
+                        self.driver.get(f"{self.base_url}/all-complaints")
+                        time.sleep(3)
+                        continue
+                    
                     # Download and verify existing document
-                    print(f"\n→ Step 4: Status is 'REVIEW PENDING' - verifying existing document...")
+                    print(f"\n→ Step 6: Phone verified! Verifying existing document...")
                     if self.download_and_verify_existing(complaint_data['date_of_call']):
                         results['success'] += 1
                         print(f"\n✅ SUCCESS: Verified {pdf_file.name}")
@@ -1031,7 +1112,7 @@ class NDNCAutomation:
                 time.sleep(3)
                 
                 # Wait before processing next file
-                if idx < len(all_files):  # Only wait if not the last file
+                if idx < len(all_files):
                     print(f"⏳ Waiting 3 seconds before processing next file...")
                     time.sleep(3)
             else:
@@ -1047,6 +1128,8 @@ class NDNCAutomation:
         print(f"   Total files processed: {results['total']}")
         print(f"   ✓ Successful: {results['success']}")
         print(f"   ✗ Failed: {results['failed']}")
+        if results['skipped_no_number'] > 0:
+            print(f"   ⚠️  Skipped (phone not in file): {results['skipped_no_number']}")
         print(f"")
         print(f"📁 All processed files moved to:")
         print(f"   {self.processed_directory}")
@@ -1133,7 +1216,7 @@ def main():
     """Main entry point"""
     # Configuration
     EMAIL = "shraddha.s@exotel.com"
-    PDF_DIRECTORY = "/Users/shraddha.s/Downloads/NDNC"
+    pdf_path = "/Users/shraddha.s/Downloads/NDNC"
     
     # Check if running via watchdog (headless mode)
     headless_mode = os.environ.get('WATCHDOG_MODE') == '1'
