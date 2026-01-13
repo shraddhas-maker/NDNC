@@ -982,6 +982,7 @@ class ReviewPendingProcessor:
             
             if not document_preview:
                 print(f"   ✗ Could not find document preview")
+                self.close_open_modals()
                 return False
             
             print(f"   → Clicking on document preview...")
@@ -1026,6 +1027,7 @@ class ReviewPendingProcessor:
                         print(f"      Button {i+1}: {btn_text}")
                 except Exception as debug_e:
                     print(f"   → Debug error: {debug_e}")
+                self.close_open_modals()
                 return False
             
             # Store current tab handle
@@ -1097,6 +1099,7 @@ class ReviewPendingProcessor:
                             self.driver.close()
                             # Switch back to main tab
                             self.driver.switch_to.window(main_tab)
+                            self.close_open_modals()
                             return False
                         
                         print(f"   ✓ Comprehensive validation passed!")
@@ -1112,6 +1115,7 @@ class ReviewPendingProcessor:
                         self.driver.close()
                         # Switch back to main tab
                         self.driver.switch_to.window(main_tab)
+                        self.close_open_modals()
                         return False
                     
                     # Close the new tab
@@ -1167,6 +1171,7 @@ class ReviewPendingProcessor:
                             return True
                     else:
                         print(f"   ✗ Could not find Verify button")
+                        self.close_open_modals()
                         return False
                 else:
                     print(f"   ✗ Could not extract date from URL")
@@ -1174,9 +1179,11 @@ class ReviewPendingProcessor:
                     self.driver.close()
                     # Switch back to main tab
                     self.driver.switch_to.window(main_tab)
+                    self.close_open_modals()
                     return False
             else:
                 print(f"   ✗ New tab did not open")
+                self.close_open_modals()
                 return False
             
         except Exception as e:
@@ -1189,6 +1196,12 @@ class ReviewPendingProcessor:
                 main_tabs = [handle for handle in self.driver.window_handles]
                 if main_tabs:
                     self.driver.switch_to.window(main_tabs[0])
+            except:
+                pass
+            
+            # Close any open modals
+            try:
+                self.close_open_modals()
             except:
                 pass
             
@@ -1229,6 +1242,9 @@ class ReviewPendingProcessor:
             
             # Search
             if not self.search_complaint(phone):
+                # Navigate back to All Complaints for next file
+                print(f"\n→ Navigating back to All Complaints page for next file...")
+                self.navigate_to_all_complaints()
                 return False
             
             # Try ALL dates until one matches a complaint
@@ -1270,10 +1286,16 @@ class ReviewPendingProcessor:
             
             if not complaint_found:
                 print(f"\n✗ No matching complaint found (tried {len(all_dates)} date(s) + filename)")
+                # Navigate back to All Complaints for next file
+                print(f"\n→ Navigating back to All Complaints page for next file...")
+                self.navigate_to_all_complaints()
                 return False
             
             # Download, verify, and click Verify button (all-in-one)
             if not self.download_and_verify_existing(matched_date, phone):
+                # Navigate back to All Complaints for next file
+                print(f"\n→ Navigating back to All Complaints page for next file...")
+                self.navigate_to_all_complaints()
                 return False
             
             print(f"\n✅ Success: {file_path.name}")
@@ -1283,6 +1305,12 @@ class ReviewPendingProcessor:
             print(f"\n✗ Error: {str(e)}")
             import traceback
             traceback.print_exc()
+            # Navigate back to All Complaints for next file
+            try:
+                print(f"\n→ Navigating back to All Complaints page for next file...")
+                self.navigate_to_all_complaints()
+            except:
+                pass  # Ignore navigation errors in exception handler
             return False
     
     def run(self):
