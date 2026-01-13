@@ -1434,6 +1434,9 @@ class NDNCCompleteAutomation:
             if not self.search_complaint(phone):
                 print(f"\n❌ SKIPPED - Phone not found in dashboard")
                 self.move_file_to_processed_review(file_path)
+                # Navigate back to All Complaints for next file
+                print(f"\n→ Navigating back to All Complaints page for next file...")
+                self.navigate_to_all_complaints()
                 return False
             
             # Step 5: Try ALL dates until one matches a complaint
@@ -1473,12 +1476,18 @@ class NDNCCompleteAutomation:
             if not complaint_found:
                 print(f"\n❌ SKIPPED - No matching complaint found (tried {len(all_dates)} date(s) + filename)")
                 self.move_file_to_processed_review(file_path)
+                # Navigate back to All Complaints for next file
+                print(f"\n→ Navigating back to All Complaints page for next file...")
+                self.navigate_to_all_complaints()
                 return False
             
             # Step 6: Download portal document and perform comprehensive validation
             if not self.download_verify_and_confirm(local_file_data, phone):
                 print(f"\n❌ SKIPPED - Validation failed (see details above)")
                 self.move_file_to_processed_review(file_path)
+                # Navigate back to All Complaints for next file
+                print(f"\n→ Navigating back to All Complaints page for next file...")
+                self.navigate_to_all_complaints()
                 return False
             
             # Step 7: Move to processed_review folder
@@ -1494,6 +1503,12 @@ class NDNCCompleteAutomation:
             import traceback
             traceback.print_exc()
             self.move_file_to_processed_review(file_path)
+            # Navigate back to All Complaints for next file
+            try:
+                print(f"\n→ Navigating back to All Complaints page for next file...")
+                self.navigate_to_all_complaints()
+            except:
+                pass  # Ignore navigation errors in exception handler
             return False
     
     def download_verify_and_confirm(self, local_file_data: dict, expected_phone: str) -> bool:
@@ -1533,6 +1548,8 @@ class NDNCCompleteAutomation:
                 
             except Exception as e:
                 print(f"   ✗ Download failed: {str(e)}")
+                # Close any open modals before returning
+                self.close_open_modals()
                 return False
             
             # Find the downloaded file
@@ -1549,6 +1566,8 @@ class NDNCCompleteAutomation:
             
             if not portal_file:
                 print(f"   ✗ Downloaded file not found")
+                # Close any open modals before returning
+                self.close_open_modals()
                 return False
             
             print(f"   ✓ Found downloaded file: {portal_file.name}")
@@ -1564,6 +1583,8 @@ class NDNCCompleteAutomation:
             reference_date = local_file_data['all_dates'][0] if local_file_data['all_dates'] else None
             if not reference_date:
                 print(f"   ✗ No reference date found in local file")
+                # Close any open modals before returning
+                self.close_open_modals()
                 return False
             
             is_valid, reason = self.validate_document_completely(
@@ -1581,6 +1602,8 @@ class NDNCCompleteAutomation:
             
             if not is_valid:
                 print(f"\n❌ VALIDATION FAILED: {reason}")
+                # Close any open modals before returning
+                self.close_open_modals()
                 return False
             
             # All validations passed - click Verify button
@@ -1616,12 +1639,19 @@ class NDNCCompleteAutomation:
                 
             except Exception as e:
                 print(f"   ✗ Could not click Verify button: {str(e)}")
+                # Close any open modals before returning
+                self.close_open_modals()
                 return False
             
         except Exception as e:
             print(f"\n✗ Error in download_verify_and_confirm: {str(e)}")
             import traceback
             traceback.print_exc()
+            # Close any open modals before returning
+            try:
+                self.close_open_modals()
+            except:
+                pass  # Ignore errors when closing modals
             return False
     
     def move_file_to_processed_review(self, file_path: Path) -> bool:
