@@ -170,6 +170,41 @@ class ReviewPendingProcessor:
             traceback.print_exc()
             return False
     
+    def close_open_modals(self):
+        """Close any open modal dialogs by clicking the X button"""
+        try:
+            wait = WebDriverWait(self.driver, 3)
+            
+            # Try to find and click the X (close) button on modal dialogs
+            close_button_selectors = [
+                # The X button from user's HTML
+                (By.XPATH, '//button[@class and contains(@class, "absolute") and contains(@class, "top-4") and contains(@class, "right-4")]//svg[contains(@class, "lucide-x")]//parent::button'),
+                (By.XPATH, '//button[contains(@class, "absolute") and contains(@class, "right-4")]/*[name()="svg" and contains(@class, "lucide-x")]//parent::button'),
+                # Generic close button in dialog
+                (By.XPATH, '//div[@role="dialog"]//button[.//span[text()="Close"]]'),
+                (By.XPATH, '//div[@role="dialog"]//button[contains(@class, "ring-offset-background")]//svg[contains(@class, "lucide-x")]//parent::button'),
+                # Any close button with X icon
+                (By.CSS_SELECTOR, 'div[role="dialog"] button svg.lucide-x'),
+            ]
+            
+            for selector_type, selector_value in close_button_selectors:
+                try:
+                    close_button = wait.until(EC.element_to_be_clickable((selector_type, selector_value)))
+                    print(f"   → Closing modal dialog...")
+                    self.driver.execute_script("arguments[0].click();", close_button)
+                    time.sleep(0.5)
+                    print(f"   ✓ Modal closed")
+                    return True
+                except:
+                    continue
+            
+            # If no modal found, that's okay
+            return True
+            
+        except Exception as e:
+            # Silently fail - modals may not be open
+            return True
+    
     def extract_phone_from_filename(self, filename: str) -> str:
         """Extract phone number from filename"""
         match = re.search(r'(\d{10})', filename)
