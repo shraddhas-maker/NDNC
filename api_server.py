@@ -28,6 +28,8 @@ socketio = SocketIO(app, cors_allowed_origins='*')
 # Global state
 automation_state = {
     'running': False,
+    'paused': False,
+    'stop_requested': False,
     'workflow': None,
     'automation': None,
     'stats': {
@@ -179,6 +181,7 @@ def get_status():
     """Get current automation status and file counts"""
     return jsonify({
         'running': automation_state['running'],
+        'paused': automation_state['paused'],
         'workflow': automation_state['workflow'],
         'file_counts': get_file_counts(),
         'stats': automation_state['stats']
@@ -197,12 +200,84 @@ def start_workflow():
     if workflow not in ['both', 'review_pending', 'open']:
         return jsonify({'error': 'Invalid workflow type'}), 400
     
+    # Reset stop flag
+    automation_state['stop_requested'] = False
+    automation_state['paused'] = False
+    
     # Start workflow in background thread
     thread = threading.Thread(target=run_automation_workflow, args=(workflow,))
     thread.daemon = True
     thread.start()
     
     return jsonify({'message': f'Started {workflow} workflow'})
+
+
+@app.route('/api/pause', methods=['POST'])
+def pause_workflow():
+    """Pause current workflow"""
+    if not automation_state['running']:
+        return jsonify({'error': 'No workflow running'}), 400
+    
+    automation_state['paused'] = True
+    socketio.emit('status', {
+        'running': True,
+        'paused': True,
+        'workflow': automation_state['workflow'],
+        'message': '⏸️ Workflow paused'
+    })
+    print("⏸️ Workflow paused by user")
+    return jsonify({'message': 'Workflow paused'})
+
+
+@app.route('/api/resume', methods=['POST'])
+def resume_workflow():
+    """Resume paused workflow"""
+    if not automation_state['running']:
+        return jsonify({'error': 'No workflow running'}), 400
+    
+    if not automation_state['paused']:
+        return jsonify({'error': 'Workflow not paused'}), 400
+    
+    automation_state['paused'] = False
+    socketio.emit('status', {
+        'running': True,
+        'paused': False,
+        'workflow': automation_state['workflow'],
+        'message': '▶️ Workflow resumed'
+    })
+    print("▶️ Workflow resumed by user")
+    return jsonify({'message': 'Workflow resumed'})
+
+
+@app.route('/api/stop', methods=['POST'])
+def stop_workflow():
+    """Stop current workflow"""
+    if not automation_state['running']:
+        return jsonify({'error': 'No workflow running'}), 400
+    
+    automation_state['stop_requested'] = True
+    automation_state['paused'] = False
+    socketio.emit('status', {
+        'running': False,
+        'paused': False,
+        'workflow': None,
+        'message': '⏹️ Workflow stopped by user'
+    })
+    print("⏹️ Workflow stop requested by user")
+    
+    # Cleanup
+    automation_state['running'] = False
+    automation_state['workflow'] = None
+    
+    if automation_state['automation'] and automation_state['automation'].driver:
+        try:
+            automation_state['automation'].driver.quit()
+        except:
+            pass
+    
+    automation_state['automation'] = None
+    
+    return jsonify({'message': 'Workflow stopped'})
 
 
 @app.route('/', methods=['GET'])

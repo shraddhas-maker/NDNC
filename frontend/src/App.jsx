@@ -10,6 +10,7 @@ const API_URL = import.meta.env.PROD
 function App() {
   const [connected, setConnected] = useState(false)
   const [running, setRunning] = useState(false)
+  const [paused, setPaused] = useState(false)
   const [workflow, setWorkflow] = useState(null)
   const [stats, setStats] = useState({
     reviewPending: '-',
@@ -48,6 +49,7 @@ function App() {
 
     socket.on('status', (data) => {
       setRunning(data.running)
+      setPaused(data.paused || false)
       setWorkflow(data.workflow)
       if (data.message) {
         addLog('Status', data.message)
@@ -100,6 +102,7 @@ function App() {
       }))
       
       setRunning(data.running)
+      setPaused(data.paused || false)
       setWorkflow(data.workflow)
     } catch (error) {
       console.error('Failed to refresh status:', error)
@@ -132,6 +135,49 @@ function App() {
       addLog('Success', `✅ ${data.message}`)
     } catch (error) {
       addLog('Error', `❌ ${error.message}`)
+    }
+  }
+
+  const pauseWorkflow = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/pause`, {
+        method: 'POST'
+      })
+      if (response.ok) {
+        setPaused(true)
+        addLog('System', '⏸️ Workflow paused')
+      }
+    } catch (error) {
+      addLog('Error', `❌ Failed to pause: ${error.message}`)
+    }
+  }
+
+  const resumeWorkflow = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/resume`, {
+        method: 'POST'
+      })
+      if (response.ok) {
+        setPaused(false)
+        addLog('System', '▶️ Workflow resumed')
+      }
+    } catch (error) {
+      addLog('Error', `❌ Failed to resume: ${error.message}`)
+    }
+  }
+
+  const stopWorkflow = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/stop`, {
+        method: 'POST'
+      })
+      if (response.ok) {
+        setRunning(false)
+        setPaused(false)
+        addLog('System', '⏹️ Workflow stopped')
+      }
+    } catch (error) {
+      addLog('Error', `❌ Failed to stop: ${error.message}`)
     }
   }
 
@@ -209,7 +255,7 @@ function App() {
           <h2>Workflow Control</h2>
           <div className="workflow-status">
             <span className={`status-indicator ${running ? 'running' : ''}`}></span>
-            <span>{running ? `Running: ${workflow}` : 'Ready'}</span>
+            <span>{running ? (paused ? `Paused: ${workflow}` : `Running: ${workflow}`) : 'Ready'}</span>
           </div>
         </div>
 
@@ -238,6 +284,36 @@ function App() {
           >
             <span>📁 Open Complaints Only</span>
           </button>
+
+          {/* Control buttons when workflow is running */}
+          {running && (
+            <div style={{ display: 'flex', gap: '15px', marginTop: '20px' }}>
+              {!paused ? (
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={pauseWorkflow}
+                  style={{ backgroundColor: '#F59E0B', borderColor: '#F59E0B' }}
+                >
+                  <span>⏸️ Pause</span>
+                </button>
+              ) : (
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={resumeWorkflow}
+                  style={{ backgroundColor: '#10B981', borderColor: '#10B981' }}
+                >
+                  <span>▶️ Resume</span>
+                </button>
+              )}
+              <button 
+                className="btn btn-secondary" 
+                onClick={stopWorkflow}
+                style={{ backgroundColor: '#EF4444', borderColor: '#EF4444' }}
+              >
+                <span>⏹️ Stop</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
