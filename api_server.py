@@ -299,8 +299,11 @@ def resume_workflow():
 
 @app.route('/api/stop', methods=['POST'])
 def stop_workflow():
-    """Stop current workflow"""
-    if not automation_state['running']:
+    """Stop current workflow and optionally shutdown server"""
+    data = request.get_json() or {}
+    shutdown_server = data.get('shutdown', False)
+    
+    if not automation_state['running'] and not shutdown_server:
         return jsonify({'error': 'No workflow running'}), 400
     
     automation_state['stop_requested'] = True
@@ -324,6 +327,24 @@ def stop_workflow():
             pass
     
     automation_state['automation'] = None
+    
+    # Shutdown server if requested
+    if shutdown_server:
+        print("🛑 Server shutdown requested...")
+        socketio.emit('status', {
+            'running': False,
+            'paused': False,
+            'workflow': None,
+            'message': '🛑 Server shutting down...'
+        })
+        
+        def shutdown():
+            time.sleep(1)
+            print("👋 Server stopped")
+            os._exit(0)
+        
+        threading.Thread(target=shutdown, daemon=True).start()
+        return jsonify({'message': 'Server shutting down'})
     
     return jsonify({'message': 'Workflow stopped'})
 

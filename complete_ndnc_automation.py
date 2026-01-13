@@ -1476,7 +1476,8 @@ class NDNCCompleteAutomation:
                 return False
             
             # Step 6: Download portal document and perform comprehensive validation
-            if not self.download_verify_and_confirm(local_file_data, phone):
+            # Use the file date for verification
+            if not self.download_and_verify_existing(file_date, phone):
                 print(f"\n❌ SKIPPED - Validation failed (see details above)")
                 self.move_file_to_processed_review(file_path)
                 return False

@@ -166,18 +166,33 @@ function App() {
     }
   }
 
-  const stopWorkflow = async () => {
+  const stopWorkflow = async (shutdownServer = false) => {
     try {
       const response = await fetch(`${API_URL}/api/stop`, {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ shutdown: shutdownServer })
       })
       if (response.ok) {
         setRunning(false)
         setPaused(false)
-        addLog('System', '⏹️ Workflow stopped')
+        if (shutdownServer) {
+          addLog('System', '🛑 Server shutting down...')
+          setConnected(false)
+        } else {
+          addLog('System', '⏹️ Workflow stopped')
+        }
       }
     } catch (error) {
       addLog('Error', `❌ Failed to stop: ${error.message}`)
+    }
+  }
+
+  const shutdownServer = async () => {
+    if (window.confirm('⚠️ This will stop the workflow AND shut down the API server. Continue?')) {
+      await stopWorkflow(true)
     }
   }
 
@@ -287,7 +302,7 @@ function App() {
 
           {/* Control buttons when workflow is running */}
           {running && (
-            <div style={{ display: 'flex', gap: '15px', marginTop: '20px' }}>
+            <div style={{ display: 'flex', gap: '15px', marginTop: '20px', flexWrap: 'wrap' }}>
               {!paused ? (
                 <button 
                   className="btn btn-secondary" 
@@ -307,10 +322,32 @@ function App() {
               )}
               <button 
                 className="btn btn-secondary" 
-                onClick={stopWorkflow}
+                onClick={() => stopWorkflow(false)}
                 style={{ backgroundColor: '#EF4444', borderColor: '#EF4444' }}
               >
-                <span>⏹️ Stop</span>
+                <span>⏹️ Stop Workflow</span>
+              </button>
+              <button 
+                className="btn btn-secondary" 
+                onClick={shutdownServer}
+                style={{ backgroundColor: '#7C3AED', borderColor: '#7C3AED' }}
+                title="Stop workflow and shut down API server"
+              >
+                <span>🛑 Shutdown Server</span>
+              </button>
+            </div>
+          )}
+          
+          {/* Shutdown button when NOT running */}
+          {!running && connected && (
+            <div style={{ marginTop: '20px' }}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={shutdownServer}
+                style={{ backgroundColor: '#6B7280', borderColor: '#6B7280', fontSize: '14px', padding: '8px 16px' }}
+                title="Shut down API server"
+              >
+                <span>🛑 Shutdown Server</span>
               </button>
             </div>
           )}
