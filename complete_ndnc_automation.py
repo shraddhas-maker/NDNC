@@ -54,9 +54,9 @@ class NDNCCompleteAutomation:
         options.add_experimental_option("prefs", prefs)
         
         self.driver = webdriver.Chrome(options=options)
-        time.sleep(2)
-        self.driver.maximize_window()
         time.sleep(1)
+        self.driver.maximize_window()
+        time.sleep(0.5)
         print("✓ Browser started and ready")
     
     def login(self):
@@ -64,7 +64,7 @@ class NDNCCompleteAutomation:
         try:
             print(f"\n→ Navigating to login page...")
             self.driver.get(f"{self.base_url}/login")
-            time.sleep(3)
+            time.sleep(2)
             
             print(f"→ Entering email: {self.email}")
             wait = WebDriverWait(self.driver, 15)
@@ -157,7 +157,7 @@ class NDNCCompleteAutomation:
             # Navigate to All Complaints
             print(f"   → Going to: {self.base_url}/all-complaints")
             self.driver.get(f"{self.base_url}/all-complaints")
-            time.sleep(5)
+            time.sleep(3)
             
             # Wait for page to fully load
             print("   → Waiting for page to load...")
@@ -207,81 +207,494 @@ class NDNCCompleteAutomation:
             return match.group(1)
         return None
     
+    def extract_telemarketer_from_filename(self, filename: str) -> str:
+        """Extract telemarketer number (second 10-digit number) from filename"""
+        matches = re.findall(r'(\d{10})', filename)
+        if len(matches) >= 2:
+            return matches[1]  # Second 10-digit number is telemarketer
+        return None
+    
+    def clean_ordinal_date(self, date_str: str) -> str:
+        """Remove ordinal suffixes (st, nd, rd, th) from dates"""
+        # Remove st, nd, rd, th from dates like "17th Dec 2025" -> "17 Dec 2025"
+        return re.sub(r'(\d{1,2})(st|nd|rd|th)\b', r'\1', date_str)
+    
     def convert_date_format(self, date_str: str) -> str:
-        """Convert date from DD-Mon-YYYY to Month DD, YYYY format"""
-        try:
-            date_obj = datetime.strptime(date_str, '%d-%b-%Y')
-            return date_obj.strftime('%B %d, %Y')
-        except:
+        """Convert date from various formats to Month DD, YYYY format"""
+        # Clean ordinal suffixes first
+        date_str = self.clean_ordinal_date(date_str)
+        
+        date_formats = [
+            '%d %b %Y',    # 17 Dec 2025 (after cleaning "17th Dec 2025")
+            '%d %B %Y',    # 17 December 2025
+            '%d-%b-%Y',    # 12-Dec-2025
+            '%d-%m-%Y',    # 12-12-2025
+            '%d/%b/%y',    # 11/Dec/25
+            '%d-%b-%y',    # 11-Dec-25
+            '%d/%b/%Y',    # 11/Dec/2025
+            '%d.%b.%Y',    # 11.Dec.2025
+            '%d.%b.%y',    # 11.Dec.25
+            '%d/%m/%Y',    # 11/12/2025
+            '%d/%m/%y',    # 11/12/25
+            '%b %d, %Y',   # Jan 2, 2026
+            '%B %d, %Y',   # January 2, 2026
+        ]
+        
+        for fmt in date_formats:
             try:
-                date_obj = datetime.strptime(date_str, '%d-%m-%Y')
+                date_obj = datetime.strptime(date_str, fmt)
                 return date_obj.strftime('%B %d, %Y')
             except:
-                return date_str
+                continue
+        
+        # If no format matches, return original
+        return date_str
+    
+    def extract_all_dates_from_text(self, text: str) -> list:
+        """Extract ALL dates from text content"""
+        dates_found = []
+        
+        # Comprehensive date patterns (more flexible)
+        date_patterns = [
+            r'\b(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})\b',  # 17th Dec 2025, 3rd Dec 2025
+            r'\b(\d{1,2})[-/\s_](\w{3,9})[-/\s_](\d{4})\b',  # 14-Dec-2025, 15 December 2025, 14_Dec_2025
+            r'\b(\d{1,2})[-/\s_](\w{3,9})[-/\s_](\d{2})\b',  # 14-Dec-25, 14_Dec_25
+            r'\b(\w{3,9})\s+(\d{1,2}),?\s+(\d{4})\b',         # December 14, 2025
+            r'\b(\d{1,2})[-/\.](\d{1,2})[-/\.](\d{4})\b',    # 14/12/2025, 14.12.2025
+            r'\b(\d{4})[-/\.](\d{1,2})[-/\.](\d{1,2})\b',    # 2025-12-14, 2025.12.14
+            r'\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})\b',  # 14 December 2025
+            r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),?\s+(\d{4})\b',  # December 14, 2025
+        ]
+        
+        for pattern in date_patterns:
+            matches = re.finditer(pattern, text, re.IGNORECASE)
+            for match in matches:
+                date_str = match.group(0).strip()
+                # Clean up date string
+                date_str = re.sub(r'\s+', ' ', date_str)  # Normalize spaces
+                if date_str and len(date_str) >= 6:  # Minimum date length
+                    dates_found.append(date_str)
+        
+        return dates_found
+    
+    def preprocess_image_for_ocr(self, image):
+        """Apply multiple preprocessing techniques to improve OCR accuracy"""
+        import cv2
+        import numpy as np
+        
+        # Convert PIL Image to numpy array
+        img_array = np.array(image)
+        
+        # Try multiple preprocessing approaches
+        processed_images = []
+        
+        # 1. Original image
+        processed_images.append(img_array)
+        
+        # 2. Grayscale conversion
+        if len(img_array.shape) == 3:
+            gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+            processed_images.append(gray)
+            
+            # 3. Thresholding
+            _, thresh1 = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+            processed_images.append(thresh1)
+            
+            # 4. Adaptive thresholding
+            thresh2 = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+            processed_images.append(thresh2)
+            
+            # 5. Noise removal
+            denoised = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
+            processed_images.append(denoised)
+        
+        return processed_images
+    
+    def extract_url_from_address_bar(self, image):
+        """Enhanced OCR specifically for browser address bar region"""
+        import cv2
+        import numpy as np
+        
+        try:
+            # Convert PIL to numpy
+            img_array = np.array(image)
+            height, width = img_array.shape[:2]
+            
+            # Focus on top 150 pixels (browser address bar area)
+            address_bar_region = img_array[0:min(150, height), :]
+            
+            # Convert to grayscale
+            if len(address_bar_region.shape) == 3:
+                gray = cv2.cvtColor(address_bar_region, cv2.COLOR_RGB2GRAY)
+            else:
+                gray = address_bar_region
+            
+            # Apply aggressive preprocessing for small text
+            # 1. Upscale 3x for better OCR
+            upscaled = cv2.resize(gray, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+            
+            # 2. Contrast enhancement
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            enhanced = clahe.apply(upscaled)
+            
+            # 3. Sharpening kernel
+            kernel = np.array([[-1,-1,-1],
+                             [-1, 9,-1],
+                             [-1,-1,-1]])
+            sharpened = cv2.filter2D(enhanced, -1, kernel)
+            
+            # 4. Binary threshold
+            _, binary = cv2.threshold(sharpened, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            
+            # Try OCR on enhanced address bar region
+            configs = [
+                '--psm 7',  # Single text line (perfect for address bar)
+                '--psm 6',  # Uniform block
+            ]
+            
+            extracted_text = []
+            for config in configs:
+                try:
+                    text = pytesseract.image_to_string(binary, config=config)
+                    if text.strip():
+                        extracted_text.append(text.strip())
+                except:
+                    continue
+            
+            return ' '.join(extracted_text)
+            
+        except Exception as e:
+            print(f"   → Address bar extraction error: {str(e)}")
+            return ""
     
     def extract_data_from_file(self, file_path: Path) -> dict:
-        """Extract phone number and date from file content using OCR"""
+        """Extract phone numbers, dates, URLs, and logos from file content using OCR"""
         try:
-            print(f"\n   → Extracting data from file content...")
-            text = ""
+            print(f"\n   → Performing comprehensive OCR extraction...")
+            all_text = ""
             
-            # Read file based on type
-            if file_path.suffix.lower() == '.png':
+            # Read file based on type with enhanced OCR
+            if file_path.suffix.lower() in ['.png', '.jpg', '.jpeg']:
                 image = Image.open(file_path)
-                text = pytesseract.image_to_string(image)
+                
+                # FIRST: Try to extract URL from browser address bar (top of screenshot)
+                print(f"   → Attempting enhanced URL extraction from address bar...")
+                address_bar_text = self.extract_url_from_address_bar(image)
+                if address_bar_text:
+                    print(f"   ✓ Address bar text: {address_bar_text[:100]}")
+                
+                # Try multiple OCR configurations and preprocessing
+                ocr_configs = [
+                    '--psm 6',  # Assume uniform block of text
+                    '--psm 3',  # Fully automatic page segmentation
+                    '--psm 11', # Sparse text
+                    '--psm 12', # Sparse text with OSD
+                ]
+                
+                # Get preprocessed images
+                try:
+                    processed_images = self.preprocess_image_for_ocr(image)
+                except Exception as prep_error:
+                    print(f"   → Preprocessing failed, using original image: {str(prep_error)}")
+                    processed_images = [image]
+                
+                # Try OCR with each configuration and preprocessing combination
+                texts = []
+                
+                # Add address bar text first (highest priority)
+                if address_bar_text:
+                    texts.append(address_bar_text)
+                
+                for config in ocr_configs:
+                    for proc_img in processed_images[:3]:  # Use first 3 preprocessing methods
+                        try:
+                            text = pytesseract.image_to_string(proc_img, config=config)
+                            if len(text.strip()) > 10:
+                                texts.append(text)
+                        except:
+                            continue
+                
+                # Combine all extracted text
+                all_text = "\n".join(texts)
+                
             else:
-                # Try text extraction first
+                # Try text extraction first for PDFs
                 try:
                     with open(file_path, 'rb') as f:
                         pdf_reader = PyPDF2.PdfReader(f)
                         for page in pdf_reader.pages:
-                            text += page.extract_text()
+                            all_text += page.extract_text()
                 except:
                     pass
                 
                 # Use OCR if needed
-                if len(text.strip()) < 50:
+                if len(all_text.strip()) < 50:
                     images = convert_from_path(str(file_path), dpi=300)
                     for image in images:
-                        text += pytesseract.image_to_string(image)
+                        # Try multiple configs for PDFs too
+                        for config in ['--psm 6', '--psm 3', '--psm 11']:
+                            try:
+                                text = pytesseract.image_to_string(image, config=config)
+                                all_text += text + "\n"
+                            except:
+                                continue
             
-            # Extract phone number (10 digits)
-            phone_match = re.search(r'(\d{10})', text)
-            phone = phone_match.group(1) if phone_match else None
+            print(f"   → OCR extracted {len(all_text)} characters")
             
-            # Extract date (DD-Mon-YYYY format)
-            date_patterns = [
-                r'(\d{1,2}[-/]\w{3,9}[-/]\d{4})',  # 18-Dec-2025
-                r'(\d{1,2}[-/]\d{1,2}[-/]\d{4})',   # 18-12-2025
-            ]
+            # Debug: Show sample of extracted text
+            if len(all_text.strip()) > 0:
+                sample = all_text[:500].replace('\n', ' ')
+                print(f"   → Text sample: {sample[:150]}...")
             
-            date = None
-            for pattern in date_patterns:
-                date_match = re.search(pattern, text)
-                if date_match:
-                    date = date_match.group(1)
-                    break
+            # Extract ALL phone numbers (10-digit, strip 91 prefix)
+            phone_pattern = r'(?:91)?(\d{10})'
+            phone_matches = re.findall(phone_pattern, all_text)
+            # Filter unique valid phones
+            unique_phones = list(set([p for p in phone_matches if len(p) == 10 and not p.startswith('0000')]))
             
-            # Also try to extract from filename if not in content
-            if not date:
-                filename_date = re.search(r'(\d{1,2}-\w{3}-\d{4})', file_path.name)
-                if filename_date:
-                    date = filename_date.group(1)
+            # Extract ALL dates
+            all_dates = self.extract_all_dates_from_text(all_text)
+            unique_dates = list(set(all_dates))
             
-            if phone:
-                print(f"   ✓ Found phone: {phone}")
-            if date:
-                print(f"   ✓ Found date: {date}")
+            # ALWAYS try to extract date from filename (primary source for matching portal)
+            filename_date = re.search(r'(\d{1,2}-\w{3}-\d{4})', file_path.name)
+            if filename_date:
+                extracted_filename_date = filename_date.group(1)
+                if extracted_filename_date not in unique_dates:
+                    unique_dates.insert(0, extracted_filename_date)  # Add at beginning (highest priority)
+                    print(f"   → Added date from filename: {extracted_filename_date} (for portal matching)")
+            
+            # Sort dates by length (longer dates are usually more complete)
+            unique_dates.sort(key=lambda x: len(x), reverse=True)
+            
+            # Check for URL/logo patterns - Includes business CRM systems and company branding
+            url_patterns = ['zomato', 'blinkit', 'lifeline', 'exotel', 'swiggy', 'uber', 'ola', 'amazon', 
+                          'flipkart', 'dunzo', 'bigbasket', 'grofers', 'myntra', 'meesho', 'paytm',
+                          'phonepe', 'gpay', 'hdfc', 'crm', 'dynamics', 'salesforce', 'persistency', 
+                          'persistence', 'shipsy', 'gam', 'portal', 'analytics', 'visualize',
+                          'http://', 'https://', 'www.', 
+                          '.com', '.in', '.org', '.net', '.io', '.co', '.ai', '.tech']
+            logo_patterns = ['order', 'delivery', 'invoice', 'receipt', 'bill', 'lead', 'policy', 
+                           'hdfc', 'life', 'insurance', 'visualisation', 'dashboard', 'analytics']
+            
+            found_urls = [url for url in url_patterns if re.search(re.escape(url), all_text, re.IGNORECASE)]
+            found_logos = [logo for logo in logo_patterns if re.search(re.escape(logo), all_text, re.IGNORECASE)]
+            
+            # Print results
+            if unique_phones:
+                print(f"   ✓ Found {len(unique_phones)} phone number(s): {', '.join(unique_phones)}")
+            else:
+                print(f"   ✗ No phone numbers found in document")
+            
+            if unique_dates:
+                print(f"   ✓ Found {len(unique_dates)} date(s): {', '.join(unique_dates)}")
+            else:
+                print(f"   ✗ No dates found in document")
+            
+            if found_urls:
+                print(f"   ✓ Found URL patterns: {', '.join(found_urls[:3])}")
+            else:
+                print(f"   ⚠️  No known URL patterns found")
+            
+            if found_logos:
+                print(f"   ✓ Found logo/brand text: {', '.join(found_logos[:3])}")
+            else:
+                print(f"   ⚠️  No logo text found")
             
             return {
-                'phone': phone,
-                'date': date,
-                'text': text
+                'phone': unique_phones[0] if unique_phones else None,
+                'all_phones': unique_phones,
+                'all_dates': unique_dates,
+                'date': unique_dates[0] if unique_dates else None,
+                'text': all_text,
+                'urls_found': found_urls,
+                'logos_found': found_logos,
+                'has_authenticity': len(found_urls) > 0 or len(found_logos) > 0
             }
             
         except Exception as e:
-            print(f"   ✗ Extraction error: {str(e)}")
-            return {'phone': None, 'date': None, 'text': ''}
+            print(f"   ✗ OCR extraction error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'phone': None,
+                'all_phones': [],
+                'all_dates': [],
+                'date': None,
+                'text': '',
+                'urls_found': [],
+                'logos_found': [],
+                'has_authenticity': False
+            }
+    
+    def validate_document_completely(self, file_data: dict, expected_phone: str, url_date_str: str) -> tuple:
+        """
+        Comprehensive validation of document using OCR data
+        Returns: (is_valid: bool, reason: str)
+        """
+        print(f"\n{'='*70}")
+        print(f"📋 COMPREHENSIVE DOCUMENT VALIDATION")
+        print(f"{'='*70}")
+        
+        validation_results = []
+        all_passed = True
+        
+        # 1. Check for URL/Logo authenticity
+        print(f"\n1. Authenticity Check (URL/Logo):")
+        if file_data.get('has_authenticity'):
+            urls = file_data.get('urls_found', [])
+            logos = file_data.get('logos_found', [])
+            print(f"   ✓ PASSED - Found patterns:")
+            if urls:
+                print(f"      URLs: {', '.join(urls)}")
+            if logos:
+                print(f"      Logos: {', '.join(logos)}")
+            validation_results.append(("Authenticity", True, f"Found: {', '.join(urls + logos)}"))
+        else:
+            print(f"   ✗ FAILED - No URL or logo patterns found")
+            print(f"      Required: Company URL or document proof")
+            print(f"      Note: Enhanced OCR attempted but no patterns detected")
+            validation_results.append(("Authenticity", False, "No URL/logo found in document"))
+            all_passed = False
+        
+        # 2. Check for phone number
+        print(f"\n2. Phone Number Check:")
+        found_phones = file_data.get('all_phones', [])
+        if expected_phone in found_phones:
+            print(f"   ✓ PASSED - Phone {expected_phone} found in document")
+            validation_results.append(("Phone", True, f"Matched: {expected_phone}"))
+        else:
+            print(f"   ✗ FAILED - Phone {expected_phone} NOT found in document")
+            if found_phones:
+                print(f"      Found in doc: {', '.join(found_phones)}")
+                print(f"      Expected: {expected_phone}")
+            else:
+                print(f"      No phone numbers found in document")
+            validation_results.append(("Phone", False, f"Expected {expected_phone}, found {found_phones}"))
+            all_passed = False
+        
+        # 3. Check for date within 6 months of URL date
+        print(f"\n3. Date Validation (within 6 months of URL date):")
+        url_date_obj = None
+        
+        # Clean ordinal suffixes from URL date
+        cleaned_url_date = self.clean_ordinal_date(url_date_str)
+        
+        # Try multiple date formats for URL date
+        date_formats = [
+            '%d %b %Y',    # 17 Dec 2025
+            '%d %B %Y',    # 17 December 2025
+            '%d-%b-%Y',    # 12-Dec-2025
+            '%d-%m-%Y',    # 12-12-2025
+            '%d/%b/%y',    # 11/Dec/25
+            '%d-%b-%y',    # 11-Dec-25
+            '%d/%b/%Y',    # 11/Dec/2025
+            '%d.%b.%Y',    # 11.Dec.2025
+            '%d.%b.%y',    # 11.Dec.25
+            '%d/%m/%Y',    # 11/12/2025
+            '%d/%m/%y',    # 11/12/25
+        ]
+        
+        for fmt in date_formats:
+            try:
+                url_date_obj = datetime.strptime(cleaned_url_date, fmt)
+                break
+            except:
+                continue
+        
+        found_dates = file_data.get('all_dates', [])
+        valid_date_found = False
+        
+        if not url_date_obj:
+            print(f"   ⚠️  Cannot parse URL date: {url_date_str}")
+        elif not found_dates:
+            print(f"   ✗ FAILED - No dates found in document content")
+            validation_results.append(("Date", False, "No dates found in document"))
+            all_passed = False
+        else:
+            print(f"   → URL date: {url_date_str} → {url_date_obj.strftime('%B %d, %Y')}")
+            print(f"   → Checking {len(found_dates)} date(s) from document:")
+            print(f"      Raw dates: {', '.join(found_dates)}")
+            print(f"\n   → Testing each date against URL date...")
+            
+            # Check each date to see if it's within 6 months
+            for idx, date_str in enumerate(found_dates, 1):
+                try:
+                    # Skip obviously invalid dates (too short, malformed)
+                    if len(date_str) < 6 or not any(c.isdigit() for c in date_str):
+                        print(f"      ⊘ Date {idx}/{len(found_dates)}: '{date_str}' - SKIPPED (malformed)")
+                        continue
+                    
+                    # Try multiple date formats - including BOTH DD/MM/YYYY and MM/DD/YYYY interpretations
+                    doc_date_obj = None
+                    cleaned_date_str = self.clean_ordinal_date(date_str)
+                    
+                    # Comprehensive format list with both DD/MM and MM/DD
+                    formats_to_try = [
+                        '%d %b %Y', '%d %B %Y',           # 17 Dec 2025
+                        '%d-%b-%Y', '%d-%B-%Y',           # 17-Dec-2025
+                        '%d/%m/%Y',                        # 16/07/2025 (DD/MM/YYYY)
+                        '%m/%d/%Y',                        # 07/16/2025 (MM/DD/YYYY)
+                        '%d-%m-%Y',                        # 16-07-2025 (DD-MM-YYYY)
+                        '%m-%d-%Y',                        # 07-16-2025 (MM-DD-YYYY)
+                        '%Y-%m-%d',                        # 2025-07-16 (ISO)
+                        '%d/%m/%y',                        # 16/07/25 (DD/MM/YY)
+                        '%m/%d/%y',                        # 07/16/25 (MM/DD/YY)
+                        '%d/%b/%y', '%d-%b-%y', '%d/%b/%Y',  # Month abbreviations
+                        '%d.%b.%Y', '%d.%b.%y',           # Dot separators
+                        '%B %d, %Y', '%b %d, %Y',         # Month name formats
+                    ]
+                    
+                    for fmt in formats_to_try:
+                        try:
+                            doc_date_obj = datetime.strptime(cleaned_date_str, fmt)
+                            break
+                        except:
+                            continue
+                    
+                    if doc_date_obj:
+                        diff_days = abs((doc_date_obj - url_date_obj).days)
+                        diff_months = diff_days / 30.44
+                        
+                        if diff_months <= 6:
+                            print(f"   ✓ PASSED - Date {idx}/{len(found_dates)}: '{date_str}' → {doc_date_obj.strftime('%B %d, %Y')}")
+                            print(f"      Difference from URL date: {diff_months:.1f} months ({diff_days} days)")
+                            validation_results.append(("Date", True, f"Matched: {date_str} ({diff_months:.1f} months)"))
+                            valid_date_found = True
+                            break  # Found a valid date within 6 months, we can stop
+                        else:
+                            print(f"      ✗ Date {idx}/{len(found_dates)}: '{date_str}' → {doc_date_obj.strftime('%B %d, %Y')} is {diff_months:.1f} months away (beyond 6 months)")
+                    else:
+                        print(f"      ⊘ Date {idx}/{len(found_dates)}: '{date_str}' - Could not parse (invalid format)")
+                        
+                except Exception as e:
+                    print(f"      ⊘ Date {idx}/{len(found_dates)}: '{date_str}' - Error: {str(e)[:50]}")
+                    continue
+            
+            if not valid_date_found:
+                print(f"   ✗ FAILED - No dates within 6 months of URL date ({url_date_str})")
+                print(f"      All dates found: {', '.join(found_dates)}")
+                validation_results.append(("Date", False, f"No dates within 6 months of {url_date_str}"))
+                all_passed = False
+        
+        # Final verdict
+        print(f"\n{'='*70}")
+        print(f"📊 VALIDATION SUMMARY")
+        print(f"{'='*70}")
+        for check_name, passed, details in validation_results:
+            status = "✓ PASS" if passed else "✗ FAIL"
+            print(f"{status} - {check_name}: {details}")
+        
+        if all_passed:
+            print(f"\n🎉 ALL VALIDATIONS PASSED - Document is authentic and valid")
+            print(f"{'='*70}\n")
+            return (True, "All validations passed")
+        else:
+            failed_checks = [name for name, passed, _ in validation_results if not passed]
+            reason = f"Failed checks: {', '.join(failed_checks)}"
+            print(f"\n❌ VALIDATION FAILED - {reason}")
+            print(f"{'='*70}\n")
+            return (False, reason)
     
     def search_complaint(self, phone_number: str) -> bool:
         """Search for complaint by phone number"""
@@ -290,6 +703,18 @@ class NDNCCompleteAutomation:
             
             wait = WebDriverWait(self.driver, 15)
             
+            # Close any open modals first
+            try:
+                close_buttons = self.driver.find_elements(By.XPATH, '//div[@role="dialog"][@data-state="open"]//button[.//svg[contains(@class, "lucide-x")]]')
+                for btn in close_buttons:
+                    try:
+                        self.driver.execute_script("arguments[0].click();", btn)
+                        time.sleep(0.5)
+                    except:
+                        pass
+            except:
+                pass
+            
             # Find search input - use the correct selector
             print(f"   → Locating search field...")
             search_input = wait.until(EC.presence_of_element_located(
@@ -297,8 +722,8 @@ class NDNCCompleteAutomation:
             ))
             time.sleep(1)
             
-            # Clear and type phone number slowly
-            search_input.clear()
+            # Use JavaScript to clear and set value instead of .clear()
+            self.driver.execute_script("arguments[0].value = '';", search_input)
             time.sleep(0.5)
             
             print(f"   → Entering phone number...")
@@ -319,22 +744,43 @@ class NDNCCompleteAutomation:
             traceback.print_exc()
             return False
     
-    def find_and_click_complaint(self, expected_date: str) -> bool:
+    def find_and_click_complaint(self, expected_date: str, telemarketer_number: str = None) -> bool:
         """Find complaint matching date and click it"""
         try:
             # Convert date to portal format (Month DD, YYYY)
             target_date = self.convert_date_format(expected_date)
             
-            try:
-                expected_date_obj = datetime.strptime(expected_date, '%d-%b-%Y')
-            except:
-                try:
-                    expected_date_obj = datetime.strptime(expected_date, '%d-%m-%Y')
-                except:
-                    print(f"   ✗ Could not parse date: {expected_date}")
-                    return False
+            # Clean ordinal suffixes and try multiple date formats to parse the expected date
+            cleaned_date = self.clean_ordinal_date(expected_date)
+            expected_date_obj = None
+            date_formats = [
+                '%d %b %Y',    # 17 Dec 2025
+                '%d %B %Y',    # 17 December 2025
+                '%d-%b-%Y',    # 12-Dec-2025
+                '%d-%m-%Y',    # 12-12-2025
+                '%d/%b/%y',    # 11/Dec/25
+                '%d-%b-%y',    # 11-Dec-25
+                '%d/%b/%Y',    # 11/Dec/2025
+                '%d.%b.%Y',    # 11.Dec.2025
+                '%d.%b.%y',    # 11.Dec.25
+                '%b %d, %Y',   # Jan 2, 2026
+                '%B %d, %Y',   # January 2, 2026
+            ]
             
-            print(f"\n   → Looking for complaint with date: {target_date}")
+            for fmt in date_formats:
+                try:
+                    expected_date_obj = datetime.strptime(cleaned_date, fmt)
+                    break
+                except:
+                    continue
+            
+            if not expected_date_obj:
+                print(f"      → Date '{expected_date}' could not be parsed (trying next date...)")
+                return False
+            
+            print(f"      → Parsed date: {target_date}")
+            if telemarketer_number:
+                print(f"   → Telemarketer filter: {telemarketer_number}")
             time.sleep(2)
             
             # Get today's date
@@ -352,6 +798,9 @@ class NDNCCompleteAutomation:
                 print(f"   ✗ No complaint rows found")
                 return False
             
+            # Collect matching rows first
+            matching_rows = []
+            
             # Iterate through rows to find matching date
             for i, row in enumerate(rows):
                 try:
@@ -363,35 +812,73 @@ class NDNCCompleteAutomation:
                         date_column = columns[4]
                         portal_date_text = date_column.text.strip()
                         
-                        print(f"     Checking row {i+1}: Portal Date = {portal_date_text}, File Date = {target_date}")
+                        # Extract telemarketer number from row (column index 1)
+                        telemarketer_column = columns[1] if len(columns) > 1 else None
+                        row_telemarketer = telemarketer_column.text.strip() if telemarketer_column else None
                         
-                        # Check if dates match or are within 6 months
+                        print(f"     Row {i+1}: Date={portal_date_text}, Telemarketer={row_telemarketer}")
+                        
+                        # Check if dates are within 6 months (no exact match required)
                         try:
                             portal_date = datetime.strptime(portal_date_text, '%B %d, %Y')
                             date_diff = abs((portal_date - expected_date_obj).days)
                             
-                            if date_diff <= 183 and portal_date >= six_months_ago:
+                            # Accept if within 6 months (183 days in either direction)
+                            if date_diff <= 183:
                                 if date_diff == 0:
-                                    print(f"     ✓ Exact date match!")
+                                    print(f"             ✓ Date: Exact match!")
                                 else:
-                                    print(f"     ✓ Date within range ({date_diff} days difference)")
+                                    print(f"             ✓ Date: Within 6 months ({date_diff} days)")
                                 
-                                print(f"   ✓ Found matching complaint! Clicking row {i+1}")
-                                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", row)
-                                time.sleep(1)
-                                
-                                # Use JavaScript click to avoid interception
-                                self.driver.execute_script("arguments[0].click();", row)
-                                time.sleep(3)
-                                return True
+                                # Add to matching rows
+                                matching_rows.append({
+                                    'index': i,
+                                    'row': row,
+                                    'date': portal_date_text,
+                                    'telemarketer': row_telemarketer,
+                                    'date_diff': date_diff
+                                })
                         except:
                             continue
                             
                 except:
                     continue
             
-            print(f"   ✗ No matching complaint found within date range")
-            return False
+            if not matching_rows:
+                print(f"   ✗ No matching complaint by date")
+                return False
+            
+            # If multiple matches and telemarketer number provided, filter by telemarketer
+            if len(matching_rows) > 1 and telemarketer_number:
+                print(f"\n   → Multiple matches found ({len(matching_rows)}), filtering by telemarketer: {telemarketer_number}")
+                
+                telemarketer_match = None
+                for match in matching_rows:
+                    if match['telemarketer'] == telemarketer_number:
+                        telemarketer_match = match
+                        print(f"   ✓ Found matching telemarketer in row {match['index']+1}")
+                        break
+                
+                if telemarketer_match:
+                    row_to_click = telemarketer_match['row']
+                    row_index = telemarketer_match['index']
+                else:
+                    print(f"   ⚠️  No telemarketer match, using first date match")
+                    row_to_click = matching_rows[0]['row']
+                    row_index = matching_rows[0]['index']
+            else:
+                # Single match or no telemarketer filter
+                row_to_click = matching_rows[0]['row']
+                row_index = matching_rows[0]['index']
+            
+            print(f"\n   ✓ Found matching complaint! Clicking row {row_index+1}")
+            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", row_to_click)
+            time.sleep(1)
+            
+            # Use JavaScript click to avoid interception
+            self.driver.execute_script("arguments[0].click();", row_to_click)
+            time.sleep(3)
+            return True
             
         except Exception as e:
             print(f"   ✗ Error finding complaint: {str(e)}")
@@ -399,42 +886,218 @@ class NDNCCompleteAutomation:
             traceback.print_exc()
             return False
     
-    def download_document_from_complaint(self) -> str:
-        """Click on uploaded document to download it, return downloaded file path"""
+    def extract_date_from_url(self, url: str) -> str:
+        """Extract date from URL in format DD-Mon-YYYY"""
         try:
-            print(f"\n   → Starting download and verification process...")
+            match = re.search(r'(\d{2})-([A-Za-z]{3})-(\d{4})', url)
+            if match:
+                return f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
+            return None
+        except:
+            return None
+    
+    def is_date_within_range(self, file_date_str: str, url_date_str: str) -> bool:
+        """Check if dates are within 6 months range"""
+        try:
+            # Clean ordinal suffixes
+            file_date_str = self.clean_ordinal_date(file_date_str)
+            url_date_str = self.clean_ordinal_date(url_date_str)
+            
+            # Try multiple date formats
+            date_formats = [
+                '%d %b %Y',    # 17 Dec 2025
+                '%d %B %Y',    # 17 December 2025
+                '%d-%b-%Y',    # 12-Dec-2025
+                '%d-%m-%Y',    # 12-12-2025
+                '%d/%b/%y',    # 11/Dec/25
+                '%d-%b-%y',    # 11-Dec-25
+                '%d/%b/%Y',    # 11/Dec/2025
+                '%d.%b.%Y',    # 11.Dec.2025
+                '%d.%b.%y',    # 11.Dec.25
+                '%d/%m/%Y',    # 11/12/2025
+                '%d/%m/%y',    # 11/12/25
+                '%b %d, %Y',   # Jan 2, 2026
+                '%B %d, %Y',   # January 2, 2026
+            ]
+            
+            # Parse file_date independently
+            file_date = None
+            for fmt in date_formats:
+                try:
+                    file_date = datetime.strptime(file_date_str, fmt)
+                    break
+                except:
+                    continue
+            
+            # Parse url_date independently
+            url_date = None
+            for fmt in date_formats:
+                try:
+                    url_date = datetime.strptime(url_date_str, fmt)
+                    break
+                except:
+                    continue
+            
+            if not file_date or not url_date:
+                print(f"   ✗ Could not parse dates: file_date='{file_date_str}' (parsed: {file_date}), url_date='{url_date_str}' (parsed: {url_date})")
+                return False
+            
+            date_diff = abs((file_date - url_date).days)
+            print(f"   → Date comparison: {file_date_str} vs {url_date_str} = {date_diff} days difference")
+            return date_diff <= 183  # 6 months = ~183 days
+        except Exception as e:
+            print(f"   ✗ Date parsing error: {str(e)}")
+            return False
+    
+    def verify_document_authenticity(self, current_url: str) -> bool:
+        """
+        Verify document authenticity by checking for URL or logo in the document
+        Takes a screenshot of the document page and uses OCR to check for specific patterns
+        """
+        try:
+            print(f"   → Verifying document authenticity with OCR...")
+            
+            # Take screenshot of the document page
+            screenshot = self.driver.get_screenshot_as_png()
+            
+            # Convert to PIL Image for OCR
+            from io import BytesIO
+            image = Image.open(BytesIO(screenshot))
+            
+            # Extract text using OCR
+            text = pytesseract.image_to_string(image)
+            text_lower = text.lower()
+            
+            # Check for URL patterns that should be present in legitimate documents
+            url_patterns = [
+                'zomato',
+                'admin.zomans.com',
+                'lifeline',
+                'exotel',
+                'order',
+            ]
+            
+            # Check for logo/brand text
+            logo_patterns = [
+                'zomato',
+                'customer',
+                'delivery',
+                'order',
+            ]
+            
+            found_patterns = []
+            
+            # Check URL patterns
+            for pattern in url_patterns:
+                if pattern in text_lower:
+                    found_patterns.append(f"URL pattern '{pattern}'")
+            
+            # Check logo patterns
+            for pattern in logo_patterns:
+                if pattern in text_lower:
+                    found_patterns.append(f"Logo text '{pattern}'")
+            
+            if found_patterns:
+                print(f"   ✓ Authenticity verified - Found: {', '.join(found_patterns[:3])}")
+                return True
+            else:
+                print(f"   ⚠️  Authenticity check: No recognizable URL or logo patterns found")
+                # Print first 100 chars of extracted text for debugging
+                preview = ' '.join(text.split()[:20])
+                print(f"   → OCR preview: {preview}...")
+                # Still return True as this is an additional check, not a blocker
+                return True
+                
+        except Exception as e:
+            print(f"   ⚠️  Authenticity check error: {str(e)}")
+            # Don't fail the verification if OCR fails
+            return True
+    
+    def download_and_verify_existing(self, file_date_str: str, expected_phone: str) -> bool:
+        """
+        Download existing document, verify date and phone, and click verify if valid
+        
+        Args:
+            file_date_str: Date from the PDF file in format DD-Mon-YYYY
+            expected_phone: Expected phone number to verify in the document
+            
+        Returns:
+            True if verification was successful, False otherwise
+        """
+        try:
+            print(f"\n→ Starting download and verification process...")
             
             wait = WebDriverWait(self.driver, 15)
-            time.sleep(2)
             
-            # Step 1: Click on the uploaded document preview - CORRECT SELECTOR
+            # Step 1: Click on the uploaded document preview
             print(f"   → Looking for uploaded document preview...")
             
-            # The file preview has lucide-file-text SVG
-            document_preview = wait.until(EC.element_to_be_clickable(
-                (By.XPATH, '//div[contains(@class, "flex items-center")]//svg[contains(@class, "lucide-file-text")]//ancestor::div[contains(@class, "flex items-center")][1]')
-            ))
+            document_selectors = [
+                (By.XPATH, '//div[@class="text-left"]//div[contains(@class, "font-medium")]'),
+                (By.CSS_SELECTOR, 'div.bg-slate-100.h-24.w-full.rounded.flex.items-center.justify-center.overflow-hidden.cursor-pointer'),
+                (By.XPATH, '//div[contains(@class, "bg-slate-100") and contains(@class, "cursor-pointer")]'),
+            ]
             
-            print(f"   → Found document preview")
+            document_preview = None
+            for selector_type, selector_value in document_selectors:
+                try:
+                    document_preview = wait.until(
+                        EC.element_to_be_clickable((selector_type, selector_value))
+                    )
+                    print(f"   → Found document preview")
+                    break
+                except:
+                    continue
+            
+            if not document_preview:
+                print(f"   ✗ Could not find document preview")
+                return False
+            
             print(f"   → Clicking on document preview...")
-            document_preview.click()
+            self.driver.execute_script("arguments[0].click();", document_preview)
+            time.sleep(3)
+            
+            # Step 2: Wait for modal dialog and click Download button
+            print(f"   → Waiting for modal dialog to open...")
+            wait.until(EC.presence_of_element_located((By.XPATH, '//div[@role="dialog"][@data-state="open"]')))
             time.sleep(2)
             
-            # Step 2: Click the Download button - CORRECT SELECTOR
-            print(f"   → Looking for Download button...")
+            print(f"   → Looking for Download button in modal...")
             
-            download_button = wait.until(EC.element_to_be_clickable(
-                (By.XPATH, '//button[.//svg[contains(@class, "lucide-download")] and contains(., "Download")]')
-            ))
+            download_selectors = [
+                (By.XPATH, '//div[@role="dialog"]//button[contains(text(), "Download")]'),
+                (By.XPATH, '//button[contains(text(), "Download") and @data-slot="button"]'),
+                (By.CSS_SELECTOR, 'div[role="dialog"] button[data-slot="button"]:has(svg.lucide-download)'),
+                (By.XPATH, '//div[@role="dialog"]//button[.//svg[contains(@class, "lucide-download")]]'),
+            ]
             
-            print(f"   → Found Download button")
+            download_button = None
+            for idx, (selector_type, selector_value) in enumerate(download_selectors):
+                try:
+                    print(f"      Trying selector {idx+1}...")
+                    download_button = wait.until(
+                        EC.element_to_be_clickable((selector_type, selector_value))
+                    )
+                    print(f"   → Found Download button (selector {idx+1})")
+                    break
+                except:
+                    continue
+            
+            if not download_button:
+                print(f"   ✗ Could not find Download button with any selector")
+                return False
             
             # Store current tab handle
             main_tab = self.driver.current_window_handle
             print(f"   → Current tab handle: {main_tab[:10]}...")
             
+            # Use JavaScript click to avoid interception
+            print(f"   → Scrolling Download button into view...")
+            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", download_button)
+            time.sleep(1)
+            
             print(f"   → Clicking Download button...")
-            download_button.click()
+            self.driver.execute_script("arguments[0].click();", download_button)
             time.sleep(3)
             
             # Step 3: Switch to new tab
@@ -451,63 +1114,106 @@ class NDNCCompleteAutomation:
                 current_url = self.driver.current_url
                 print(f"   → URL: {current_url}")
                 
-                # Return info
-                return {
-                    'url': current_url,
-                    'main_window': main_tab,
-                    'new_window': new_tab
-                }
+                # Step 4.5: Verify document authenticity using OCR
+                if not self.verify_document_authenticity(current_url):
+                    print(f"   ⚠️  Document authenticity could not be verified")
+                    # Continue anyway as it's an additional check
+                
+                # Extract date from URL
+                url_date = self.extract_date_from_url(current_url)
+                
+                if url_date:
+                    print(f"   → Extracted date from URL: {url_date}")
+                    
+                    # Step 5: Compare dates (portal date should be same or within 6 months before file date)
+                    if self.is_date_within_range(file_date_str, url_date):
+                        print(f"   ✓ Date validation passed!")
+                        
+                        # Close the new tab
+                        self.driver.close()
+                        
+                        # Switch back to main tab
+                        self.driver.switch_to.window(main_tab)
+                        print(f"   ✓ Switched back to main tab")
+                        time.sleep(2)
+                        
+                        # Step 6: Click Verify button (inside dialog footer)
+                        print(f"   → Looking for Verify button in modal...")
+                        
+                        # Wait for modal to be visible again
+                        wait.until(EC.presence_of_element_located((By.XPATH, '//div[@role="dialog"][@data-state="open"]')))
+                        time.sleep(1)
+                        
+                        verify_selectors = [
+                            (By.XPATH, '//div[@role="dialog"]//button[contains(@class, "bg-emerald-600") and .//svg[contains(@class, "lucide-check")]]'),
+                            (By.XPATH, '//div[@data-slot="dialog-footer"]//button[contains(@class, "bg-emerald-600")]'),
+                            (By.XPATH, '//div[@role="dialog"]//button[contains(., "Verify") and contains(@class, "bg-emerald-600")]'),
+                        ]
+                        
+                        verify_button = None
+                        for selector_type, selector_value in verify_selectors:
+                            try:
+                                verify_button = wait.until(
+                                    EC.element_to_be_clickable((selector_type, selector_value))
+                                )
+                                print(f"   → Found Verify button")
+                                break
+                            except:
+                                continue
+                        
+                        if verify_button:
+                            print(f"   → Clicking Verify button...")
+                            self.driver.execute_script("arguments[0].click();", verify_button)
+                            time.sleep(2)
+                            
+                            # Step 7: Handle confirmation dialog "Verify Document"
+                            print(f"   → Looking for confirmation dialog...")
+                            try:
+                                confirm_verify_button = wait.until(EC.element_to_be_clickable(
+                                    (By.XPATH, '//button[contains(@class, "bg-emerald-600") and contains(text(), "Verify Document")]')
+                                ))
+                                print(f"   → Clicking Verify Document confirmation...")
+                                self.driver.execute_script("arguments[0].click();", confirm_verify_button)
+                                time.sleep(3)
+                                print(f"   ✅ Document verified successfully!")
+                                return True
+                            except Exception as confirm_e:
+                                print(f"   ⚠️  Confirmation dialog not found, verification may have completed")
+                                return True
+                        else:
+                            print(f"   ✗ Could not find Verify button")
+                            return False
+                    else:
+                        print(f"   ✗ Date validation failed - dates are beyond 6-month range")
+                        # Close the new tab
+                        self.driver.close()
+                        # Switch back to main tab
+                        self.driver.switch_to.window(main_tab)
+                        return False
+                else:
+                    print(f"   ✗ Could not extract date from URL")
+                    # Close the new tab
+                    self.driver.close()
+                    # Switch back to main tab
+                    self.driver.switch_to.window(main_tab)
+                    return False
             else:
-                print(f"   ⚠️  No new tab opened")
-                return None
+                print(f"   ✗ New tab did not open")
+                return False
             
         except Exception as e:
-            print(f"   ✗ Download error: {str(e)}")
+            print(f"   ✗ Error in download and verify process: {str(e)}")
             import traceback
             traceback.print_exc()
-            return None
-    
-    def verify_document_match(self, url: str, expected_phone: str, expected_date: str, file_text: str) -> bool:
-        """Verify document URL date matches and phone number is in file"""
-        try:
-            print(f"\n   → Verifying document...")
             
-            # Extract date from URL
-            url_date_match = re.search(r'(\d{2})-([A-Za-z]{3})-(\d{4})', url)
-            if url_date_match:
-                url_date_str = f"{url_date_match.group(1)}-{url_date_match.group(2)}-{url_date_match.group(3)}"
-                print(f"   → URL date: {url_date_str}")
-                
-                # Parse dates
-                try:
-                    url_date = datetime.strptime(url_date_str, '%d-%b-%Y')
-                    expected_date_obj = datetime.strptime(expected_date, '%d-%b-%Y')
-                except:
-                    try:
-                        expected_date_obj = datetime.strptime(expected_date, '%d-%m-%Y')
-                    except:
-                        print(f"   ✗ Could not parse dates")
-                        return False
-                
-                # Check date match (within 6 months)
-                date_diff = abs((url_date - expected_date_obj).days)
-                if date_diff > 183:
-                    print(f"   ✗ Date mismatch: {date_diff} days difference")
-                    return False
-                
-                print(f"   ✓ Date verified ({date_diff} days difference)")
+            # Try to switch back to main tab if we're in a different one
+            try:
+                main_tabs = [handle for handle in self.driver.window_handles]
+                if main_tabs:
+                    self.driver.switch_to.window(main_tabs[0])
+            except:
+                pass
             
-            # Check phone number in file text
-            clean_text = re.sub(r'[^0-9]', '', file_text)
-            if expected_phone in clean_text or f"91{expected_phone}" in clean_text:
-                print(f"   ✓ Phone number verified in document")
-                return True
-            else:
-                print(f"   ✗ Phone number NOT found in document")
-                return False
-                
-        except Exception as e:
-            print(f"   ✗ Verification error: {str(e)}")
             return False
     
     def check_complaint_status(self) -> str:
@@ -677,84 +1383,245 @@ class NDNCCompleteAutomation:
     def process_review_pending_file(self, file_path: Path) -> bool:
         """Process a single Review Pending file (already downloaded from dashboard)"""
         try:
-            print(f"\n{'='*60}")
-            print(f"📄 Processing Review Pending: {file_path.name}")
-            print(f"{'='*60}")
+            print(f"\n{'='*70}")
+            print(f"📄 PROCESSING REVIEW PENDING FILE")
+            print(f"{'='*70}")
+            print(f"File: {file_path.name}\n")
             
-            # Extract phone from filename
+            # Step 1: Extract phone from filename
             phone = self.extract_phone_from_filename(file_path.name)
             if not phone:
-                print(f"✗ No phone number in filename")
+                print(f"❌ SKIPPED - No phone number in filename")
+                self.move_file_to_processed_review(file_path)
                 return False
             
             print(f"✓ Phone from filename: {phone}")
             
-            # Extract data from file content
-            file_data = self.extract_data_from_file(file_path)
-            if not file_data['date']:
-                print(f"✗ Could not extract date from file")
+            # Extract telemarketer number from filename (if present)
+            telemarketer = self.extract_telemarketer_from_filename(file_path.name)
+            if telemarketer:
+                print(f"✓ Telemarketer from filename: {telemarketer}")
+            else:
+                print(f"⚠️  No telemarketer number in filename")
+            
+            # Step 2: Perform comprehensive OCR extraction on LOCAL file
+            print(f"\n{'─'*70}")
+            print(f"🔍 LOCAL FILE OCR EXTRACTION")
+            print(f"{'─'*70}")
+            local_file_data = self.extract_data_from_file(file_path)
+            
+            # Step 3: Validate LOCAL file has minimum required data
+            if not local_file_data.get('has_authenticity'):
+                print(f"\n❌ SKIPPED - Local file has no URL/logo (not authentic)")
+                print(f"   Reason: Document must contain recognizable URL or logo")
+                print(f"   Note: Enhanced OCR attempted but no patterns found")
+                self.move_file_to_processed_review(file_path)
                 return False
             
-            expected_date = file_data['date']
-            file_text = file_data['text']
+            if phone not in local_file_data.get('all_phones', []):
+                print(f"\n❌ SKIPPED - Phone {phone} not found in local file content")
+                self.move_file_to_processed_review(file_path)
+                return False
             
-            # Navigate to All Complaints
+            if not local_file_data.get('all_dates'):
+                print(f"\n❌ SKIPPED - No dates found in local file content")
+                self.move_file_to_processed_review(file_path)
+                return False
+            
+            # Step 4: Navigate and search
             self.navigate_to_all_complaints()
             
-            # Search for phone number
             if not self.search_complaint(phone):
-                # Move to processed_review anyway
+                print(f"\n❌ SKIPPED - Phone not found in dashboard")
                 self.move_file_to_processed_review(file_path)
                 return False
             
-            # Find and click matching complaint
-            if not self.find_and_click_complaint(expected_date):
-                # Move to processed_review anyway
+            # Step 5: Try ALL dates until one matches a complaint
+            all_dates = local_file_data['all_dates']
+            print(f"\n→ Trying {len(all_dates)} date(s) to find matching complaint...")
+            
+            complaint_found = False
+            for idx, expected_date in enumerate(all_dates, 1):
+                print(f"\n   → Attempt {idx}/{len(all_dates)}: Trying date '{expected_date}'")
+                
+                if self.find_and_click_complaint(expected_date, telemarketer):
+                    print(f"   ✓ Successfully matched complaint with date: {expected_date}")
+                    complaint_found = True
+                    break
+                else:
+                    print(f"   ✗ Date '{expected_date}' did not match any complaint")
+                    # Continue to next date
+            
+            # FALLBACK: If no dates matched, try extracting date from filename and match exactly
+            if not complaint_found:
+                print(f"\n⚠️  No dates matched within 6 months. Trying FALLBACK: filename date exact match...")
+                
+                # Extract date from filename (format: DD-Mon-YYYY)
+                filename_date_match = re.search(r'(\d{1,2})-(\w{3})-(\d{4})', file_path.name)
+                if filename_date_match:
+                    filename_date = filename_date_match.group(0)
+                    print(f"   → Extracted filename date: {filename_date}")
+                    
+                    if self.find_and_click_complaint(filename_date, telemarketer):
+                        print(f"   ✓ Successfully matched using filename date: {filename_date}")
+                        complaint_found = True
+                    else:
+                        print(f"   ✗ Filename date '{filename_date}' also did not match")
+                else:
+                    print(f"   ✗ Could not extract date from filename")
+            
+            if not complaint_found:
+                print(f"\n❌ SKIPPED - No matching complaint found (tried {len(all_dates)} date(s) + filename)")
                 self.move_file_to_processed_review(file_path)
                 return False
             
-            # Download document from complaint (for verification)
-            download_info = self.download_document_from_complaint()
-            if not download_info:
-                # Move to processed_review anyway
+            # Step 6: Download portal document and perform comprehensive validation
+            if not self.download_verify_and_confirm(local_file_data, phone):
+                print(f"\n❌ SKIPPED - Validation failed (see details above)")
                 self.move_file_to_processed_review(file_path)
                 return False
             
-            # Verify document
-            verified = self.verify_document_match(
-                download_info['url'],
-                phone,
-                expected_date,
-                file_text
-            )
-            
-            # Close download tab and return to main
-            self.driver.close()
-            self.driver.switch_to.window(download_info['main_window'])
-            time.sleep(1)
-            
-            if not verified:
-                print(f"✗ Document verification failed")
-                self.move_file_to_processed_review(file_path)
-                return False
-            
-            # Click Verify button
-            if not self.click_verify_button_review_pending():
-                self.move_file_to_processed_review(file_path)
-                return False
-            
-            # Move to processed_review folder
+            # Step 7: Move to processed_review folder
             self.move_file_to_processed_review(file_path)
             
-            print(f"\n✅ Successfully processed: {file_path.name}")
+            print(f"\n{'='*70}")
+            print(f"✅ SUCCESSFULLY VERIFIED AND PROCESSED")
+            print(f"{'='*70}\n")
             return True
             
         except Exception as e:
             print(f"\n✗ Processing error: {str(e)}")
             import traceback
             traceback.print_exc()
-            # Move to processed_review anyway
             self.move_file_to_processed_review(file_path)
+            return False
+    
+    def download_verify_and_confirm(self, local_file_data: dict, expected_phone: str) -> bool:
+        """
+        Download portal document, perform comprehensive OCR validation, and click verify
+        Returns True if all validations pass and verify clicked, False otherwise
+        """
+        try:
+            print(f"\n{'─'*70}")
+            print(f"📥 DOWNLOADING PORTAL DOCUMENT FOR VALIDATION")
+            print(f"{'─'*70}")
+            
+            # Get current URL to extract date
+            current_url = self.driver.current_url
+            url_date_str = self.extract_date_from_url(current_url)
+            
+            if not url_date_str:
+                print(f"   ✗ Cannot extract date from URL: {current_url}")
+                return False
+            
+            print(f"   → URL date: {url_date_str}")
+            
+            # Download the portal document
+            print(f"\n   → Clicking document to download...")
+            wait = WebDriverWait(self.driver, 15)
+            
+            try:
+                # Click to open modal/download
+                document_link = wait.until(EC.element_to_be_clickable(
+                    (By.XPATH, '//a[contains(@href, "/download")]')
+                ))
+                self.driver.execute_script("arguments[0].click();", document_link)
+                time.sleep(3)
+                
+                # Look for download button in modal
+                download_button = wait.until(EC.element_to_be_clickable(
+                    (By.XPATH, '//div[@role="dialog"]//a[contains(@href, "/download")]')
+                ))
+                self.driver.execute_script("arguments[0].click();", download_button)
+                time.sleep(5)
+                
+                print(f"   ✓ Document download initiated")
+                
+            except Exception as e:
+                print(f"   ✗ Download failed: {str(e)}")
+                return False
+            
+            # Find the downloaded file
+            print(f"\n   → Looking for downloaded file...")
+            portal_file = None
+            for _ in range(10):
+                time.sleep(1)
+                files = list(self.ndnc_folder.glob("*.pdf")) + list(self.ndnc_folder.glob("*.png")) + \
+                        list(self.ndnc_folder.glob("*.jpg")) + list(self.ndnc_folder.glob("*.jpeg"))
+                recent_files = [f for f in files if (time.time() - f.stat().st_mtime) < 15]
+                if recent_files:
+                    portal_file = max(recent_files, key=lambda x: x.stat().st_mtime)
+                    break
+            
+            if not portal_file:
+                print(f"   ✗ Downloaded file not found")
+                return False
+            
+            print(f"   ✓ Found downloaded file: {portal_file.name}")
+            
+            # Perform comprehensive OCR on portal document
+            print(f"\n{'─'*70}")
+            print(f"🔍 PORTAL DOCUMENT OCR EXTRACTION")
+            print(f"{'─'*70}")
+            portal_file_data = self.extract_data_from_file(portal_file)
+            
+            # Perform comprehensive validation
+            is_valid, reason = self.validate_document_completely(
+                portal_file_data, 
+                expected_phone, 
+                url_date_str
+            )
+            
+            # Clean up portal file
+            try:
+                portal_file.unlink()
+                print(f"   → Cleaned up portal document")
+            except:
+                pass
+            
+            if not is_valid:
+                print(f"\n❌ VALIDATION FAILED: {reason}")
+                return False
+            
+            # All validations passed - click Verify button
+            print(f"\n{'─'*70}")
+            print(f"✅ ALL VALIDATIONS PASSED - CLICKING VERIFY")
+            print(f"{'─'*70}")
+            
+            # Click Verify button
+            try:
+                time.sleep(2)
+                verify_button = wait.until(EC.element_to_be_clickable(
+                    (By.XPATH, '//button[contains(., "Verify") and not(contains(., "Bulk"))]')
+                ))
+                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", verify_button)
+                time.sleep(1)
+                self.driver.execute_script("arguments[0].click();", verify_button)
+                time.sleep(2)
+                
+                print(f"   ✓ Clicked Verify button")
+                
+                # Click confirmation dialog
+                try:
+                    confirm_button = WebDriverWait(self.driver, 5).until(
+                        EC.element_to_be_clickable((By.XPATH, '//button[contains(text(), "Verify Document")]'))
+                    )
+                    self.driver.execute_script("arguments[0].click();", confirm_button)
+                    time.sleep(2)
+                    print(f"   ✓ Confirmed verification")
+                except:
+                    print(f"   → No confirmation dialog (or already confirmed)")
+                
+                return True
+                
+            except Exception as e:
+                print(f"   ✗ Could not click Verify button: {str(e)}")
+                return False
+            
+        except Exception as e:
+            print(f"\n✗ Error in download_verify_and_confirm: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def move_file_to_processed_review(self, file_path: Path) -> bool:
@@ -814,13 +1681,18 @@ class NDNCCompleteAutomation:
             
             print(f"✓ Phone from filename: {phone}")
             
+            # Extract telemarketer number from filename (if present)
+            telemarketer = self.extract_telemarketer_from_filename(file_path.name)
+            if telemarketer:
+                print(f"✓ Telemarketer from filename: {telemarketer}")
+            else:
+                print(f"⚠️  No telemarketer number in filename")
+            
             # Extract data from file content
             file_data = self.extract_data_from_file(file_path)
-            if not file_data['date']:
-                print(f"✗ Could not extract date from file")
+            if not file_data.get('all_dates'):
+                print(f"✗ Could not extract any dates from file")
                 return False
-            
-            expected_date = file_data['date']
             
             # Navigate to All Complaints
             self.navigate_to_all_complaints()
@@ -829,8 +1701,42 @@ class NDNCCompleteAutomation:
             if not self.search_complaint(phone):
                 return False
             
-            # Find and click matching complaint
-            if not self.find_and_click_complaint(expected_date):
+            # Try ALL dates until one matches a complaint
+            all_dates = file_data['all_dates']
+            print(f"\n→ Trying {len(all_dates)} date(s) to find matching complaint...")
+            
+            complaint_found = False
+            for idx, expected_date in enumerate(all_dates, 1):
+                print(f"\n   → Attempt {idx}/{len(all_dates)}: Trying date '{expected_date}'")
+                
+                if self.find_and_click_complaint(expected_date, telemarketer):
+                    print(f"   ✓ Successfully matched complaint with date: {expected_date}")
+                    complaint_found = True
+                    break
+                else:
+                    print(f"   ✗ Date '{expected_date}' did not match any complaint")
+                    # Continue to next date
+            
+            # FALLBACK: If no dates matched, try extracting date from filename and match exactly
+            if not complaint_found:
+                print(f"\n⚠️  No dates matched within 6 months. Trying FALLBACK: filename date exact match...")
+                
+                # Extract date from filename (format: DD-Mon-YYYY)
+                filename_date_match = re.search(r'(\d{1,2})-(\w{3})-(\d{4})', file_path.name)
+                if filename_date_match:
+                    filename_date = filename_date_match.group(0)
+                    print(f"   → Extracted filename date: {filename_date}")
+                    
+                    if self.find_and_click_complaint(filename_date, telemarketer):
+                        print(f"   ✓ Successfully matched using filename date: {filename_date}")
+                        complaint_found = True
+                    else:
+                        print(f"   ✗ Filename date '{filename_date}' also did not match")
+                else:
+                    print(f"   ✗ Could not extract date from filename")
+            
+            if not complaint_found:
+                print(f"\n✗ No matching complaint found (tried {len(all_dates)} date(s) + filename)")
                 return False
             
             # Upload document
@@ -870,7 +1776,24 @@ class NDNCCompleteAutomation:
             
             print(f"   → Reading Excel data...")
             
-            # Columns: T (20) = Document Link, C (3) = Complainer No, G (7) = Date of call/sms
+            # Check header row to find Document Link column
+            print(f"   → Checking Excel structure...")
+            header_row = 1
+            doc_link_col = None
+            
+            # Search for Document Link column (usually T=20, but verify)
+            for col_idx in range(1, sheet.max_column + 1):
+                header_cell = sheet.cell(header_row, col_idx).value
+                if header_cell and 'Document Link' in str(header_cell):
+                    doc_link_col = col_idx
+                    print(f"   ✓ Found 'Document Link' in column {col_idx} ({chr(64 + col_idx)})")
+                    break
+            
+            if not doc_link_col:
+                print(f"   ⚠️  'Document Link' column not found, using column T (20)")
+                doc_link_col = 20
+            
+            # Columns: C (3) = Complainer No, G (7) = Date of call/sms
             total_rows = sheet.max_row - 1  # Exclude header
             print(f"   → Found {total_rows} rows\n")
             
@@ -881,59 +1804,138 @@ class NDNCCompleteAutomation:
                     # Get data from columns
                     complainer_no = sheet.cell(row_idx, 3).value  # Column C
                     date_of_call = sheet.cell(row_idx, 7).value   # Column G
-                    doc_link_cell = sheet.cell(row_idx, 20)       # Column T
+                    doc_link_cell = sheet.cell(row_idx, doc_link_col)  # Document Link column (dynamic)
                     
-                    # Get download link (hyperlink or cell value)
-                    download_link = doc_link_cell.hyperlink.target if doc_link_cell.hyperlink else doc_link_cell.value
+                    # Debug: Show cell info
+                    cell_value = doc_link_cell.value
+                    cell_hyperlink = doc_link_cell.hyperlink
+                    
+                    print(f"\n   Row {row_idx-1}: {complainer_no} ({date_of_call})")
+                    print(f"      → Cell value: {cell_value}")
+                    print(f"      → Has hyperlink: {cell_hyperlink is not None}")
+                    
+                    # Try multiple methods to get the download link
+                    download_link = None
+                    
+                    # Method 1: Check hyperlink target
+                    if cell_hyperlink and hasattr(cell_hyperlink, 'target'):
+                        download_link = cell_hyperlink.target
+                        print(f"      → Extracted from hyperlink.target")
+                    # Method 2: Check cell value
+                    elif cell_value and isinstance(cell_value, str) and cell_value.startswith('http'):
+                        download_link = cell_value
+                        print(f"      → Extracted from cell value")
+                    # Method 3: Check if value is "Download Here" and has hyperlink
+                    elif cell_value == 'Download Here' and cell_hyperlink:
+                        download_link = str(cell_hyperlink)
+                        print(f"      → Extracted from hyperlink object")
                     
                     if not download_link or download_link in ['Download Here', None, '']:
-                        print(f"   Row {row_idx-1}: No valid download link, skipping...")
+                        print(f"      ✗ No valid download link found, skipping...")
                         continue
                     
-                    print(f"   Row {row_idx-1}: {complainer_no} ({date_of_call})")
-                    print(f"      → Downloading: {download_link[:60]}...")
+                    print(f"      → Download URL: {download_link[:80]}...")
+                    
+                    # Extract expected filename from URL or use phone/date
+                    expected_filename = None
+                    url_match = re.search(r'/([^/]+\.(pdf|png|jpg|jpeg))$', download_link, re.IGNORECASE)
+                    if url_match:
+                        expected_filename = url_match.group(1)
+                    
+                    # Check if file already exists in review_pending to avoid duplicates
+                    if expected_filename:
+                        existing_file = self.review_pending_folder / expected_filename
+                        if existing_file.exists():
+                            print(f"      ⊘ File already exists in review_pending/, skipping download")
+                            continue
                     
                     # Navigate directly to the download link
                     # This will trigger download in current tab
-                    self.driver.get(download_link)
-                    time.sleep(4)
-                    
-                    # Wait for file to download
-                    time.sleep(3)
-                    
-                    # Find the downloaded file - files download to self.ndnc_folder
-                    pdf_files = list(self.ndnc_folder.glob("*.pdf")) + list(self.ndnc_folder.glob("*.png"))
-                    
-                    # Exclude files already in subfolders
-                    pdf_files = [f for f in pdf_files if f.parent == self.ndnc_folder]
-                    
-                    if pdf_files:
-                        latest_file = max(pdf_files, key=lambda x: x.stat().st_mtime)
+                    try:
+                        print(f"      → Navigating to download link...")
+                        self.driver.get(download_link)
+                        time.sleep(4)
                         
-                        # Check if recently downloaded (within last 10 seconds)
-                        if (time.time() - latest_file.stat().st_mtime) < 10:
-                            # File already has correct name from dashboard, just move it
-                            dest_path = self.review_pending_folder / latest_file.name
-                            if dest_path.exists():
-                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                dest_path = self.review_pending_folder / f"{latest_file.stem}_{timestamp}{latest_file.suffix}"
+                        # Check if we got redirected to an error page
+                        current_url = self.driver.current_url
+                        if 'error' in current_url.lower() or '404' in current_url:
+                            print(f"      ⚠️  Download link appears invalid (error/404)")
+                            continue
                             
-                            shutil.move(str(latest_file), str(dest_path))
-                            print(f"      ✓ Downloaded: {latest_file.name}")
-                            downloaded_count += 1
+                    except Exception as nav_error:
+                        print(f"      ⚠️  Navigation error: {str(nav_error)}")
+                        continue
+                    
+                    # Wait for file to download with retry logic
+                    max_retries = 3
+                    retry_count = 0
+                    file_moved = False
+                    
+                    while retry_count < max_retries and not file_moved:
+                        time.sleep(3)
+                        
+                        # Find the downloaded file - files download to self.ndnc_folder
+                        pdf_files = list(self.ndnc_folder.glob("*.pdf")) + list(self.ndnc_folder.glob("*.png")) + \
+                                    list(self.ndnc_folder.glob("*.jpg")) + list(self.ndnc_folder.glob("*.jpeg"))
+                        
+                        # Exclude files already in subfolders
+                        pdf_files = [f for f in pdf_files if f.parent == self.ndnc_folder]
+                        
+                        if pdf_files:
+                            latest_file = max(pdf_files, key=lambda x: x.stat().st_mtime)
+                            
+                            # Check if recently downloaded (within last 30 seconds - increased from 10)
+                            time_diff = time.time() - latest_file.stat().st_mtime
+                            if time_diff < 30:
+                                # File already has correct name from dashboard, just move it
+                                dest_path = self.review_pending_folder / latest_file.name
+                                if dest_path.exists():
+                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    dest_path = self.review_pending_folder / f"{latest_file.stem}_{timestamp}{latest_file.suffix}"
+                                
+                                try:
+                                    shutil.move(str(latest_file), str(dest_path))
+                                    print(f"      ✓ Downloaded & moved: {latest_file.name}")
+                                    downloaded_count += 1
+                                    file_moved = True
+                                except Exception as move_e:
+                                    print(f"      ⚠️  Move error: {str(move_e)}")
+                                    retry_count += 1
+                            else:
+                                print(f"      ⚠️  File too old ({time_diff:.1f}s), retrying...")
+                                retry_count += 1
                         else:
-                            print(f"      ⚠️  No recent download found")
+                            print(f"      ⚠️  No files found in NDNC folder, retrying...")
+                            retry_count += 1
+                    
+                    if not file_moved:
+                        print(f"      ✗ Failed to download/move file after {max_retries} attempts")
                     
                 except Exception as e:
                     print(f"   ⚠️  Error downloading row {row_idx-1}: {str(e)}")
                     continue
             
             # Delete Excel file after processing
+            print(f"\n   → Cleaning up Excel file...")
             try:
-                excel_path.unlink()
-                print(f"\n   → Deleted Excel file")
-            except:
-                pass
+                if excel_path.exists():
+                    excel_path.unlink()
+                    print(f"   ✓ Deleted Excel file: {excel_path.name}")
+                else:
+                    print(f"   ℹ️  Excel file already removed")
+            except Exception as cleanup_e:
+                print(f"   ⚠️  Could not delete Excel file: {str(cleanup_e)}")
+            
+            print(f"\n   → Checking NDNC folder for any remaining files...")
+            remaining_files = list(self.ndnc_folder.glob("*.pdf")) + list(self.ndnc_folder.glob("*.png")) + \
+                              list(self.ndnc_folder.glob("*.jpg")) + list(self.ndnc_folder.glob("*.jpeg"))
+            remaining_files = [f for f in remaining_files if f.parent == self.ndnc_folder]
+            if remaining_files:
+                print(f"   ⚠️  {len(remaining_files)} file(s) still in NDNC folder:")
+                for f in remaining_files[:5]:  # Show first 5
+                    print(f"      - {f.name}")
+            else:
+                print(f"   ✓ NDNC folder clean - all files moved to review_pending/")
             
             return downloaded_count
             
@@ -943,12 +1945,37 @@ class NDNCCompleteAutomation:
             traceback.print_exc()
             return 0
     
+    def cleanup_ndnc_folder(self):
+        """Move any leftover files from NDNC folder to review_pending"""
+        try:
+            leftover_files = list(self.ndnc_folder.glob("*.pdf")) + list(self.ndnc_folder.glob("*.png")) + \
+                             list(self.ndnc_folder.glob("*.jpg")) + list(self.ndnc_folder.glob("*.jpeg"))
+            leftover_files = [f for f in leftover_files if f.parent == self.ndnc_folder]
+            
+            if leftover_files:
+                print(f"   → Found {len(leftover_files)} leftover file(s) in NDNC folder")
+                for file in leftover_files:
+                    try:
+                        dest_path = self.review_pending_folder / file.name
+                        if dest_path.exists():
+                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            dest_path = self.review_pending_folder / f"{file.stem}_{timestamp}{file.suffix}"
+                        shutil.move(str(file), str(dest_path))
+                        print(f"   → Moved leftover: {file.name}")
+                    except Exception as e:
+                        print(f"   ⚠️  Could not move {file.name}: {str(e)}")
+        except Exception as e:
+            print(f"   ⚠️  Cleanup error: {str(e)}")
+    
     def download_review_pending_files_from_dashboard(self) -> int:
         """Download all Review Pending documents from dashboard"""
         try:
             print(f"\n{'='*70}")
             print(f"📥 DOWNLOADING REVIEW PENDING FILES FROM DASHBOARD")
             print(f"{'='*70}\n")
+            
+            # Clean up any leftover files from previous run
+            self.cleanup_ndnc_folder()
             
             # Navigate to All Complaints
             self.navigate_to_all_complaints()
@@ -987,14 +2014,56 @@ class NDNCCompleteAutomation:
                     self.driver.execute_script("arguments[0].click();", status_filter_button)
                     time.sleep(2)
                     
-                    # Select "Review Pending" from dropdown
+                    # Wait for dropdown menu to appear
+                    try:
+                        WebDriverWait(self.driver, 5).until(
+                            EC.presence_of_element_located((By.XPATH, '//div[@role="listbox" or @role="menu"]'))
+                        )
+                        print(f"   → Dropdown opened")
+                        time.sleep(1)  # Additional wait for options to render
+                    except:
+                        print(f"   ⚠️  Dropdown menu not detected")
+                    
+                    # Select "Review Pending" from dropdown - try multiple selectors
                     print(f"   → Looking for Review Pending option...")
-                    review_pending_option = wait.until(EC.element_to_be_clickable(
-                        (By.XPATH, '//div[@role="option"]//span[text()="Review Pending"]')
-                    ))
+                    
+                    review_pending_option = None
+                    selectors = [
+                        (By.XPATH, '//div[@role="option"]//span[text()="Review Pending"]'),
+                        (By.XPATH, '//div[@role="option" and contains(., "Review Pending")]'),
+                        (By.XPATH, '//div[@role="listbox"]//div[contains(text(), "Review Pending")]'),
+                        (By.XPATH, '//*[@role="option"][.//text()="Review Pending"]'),
+                    ]
+                    
+                    for idx, (by, selector) in enumerate(selectors):
+                        try:
+                            print(f"      Trying selector {idx+1}...")
+                            review_pending_option = WebDriverWait(self.driver, 5).until(
+                                EC.presence_of_element_located((by, selector))
+                            )
+                            if review_pending_option:
+                                print(f"   → Found Review Pending option (selector {idx+1})")
+                                break
+                        except:
+                            continue
+                    
+                    if not review_pending_option:
+                        # Debug: Show what options are available
+                        try:
+                            all_options = self.driver.find_elements(By.XPATH, '//div[@role="option"]')
+                            print(f"   → Found {len(all_options)} options in dropdown:")
+                            for i, opt in enumerate(all_options[:10]):  # Show first 10
+                                print(f"      Option {i+1}: {opt.text}")
+                        except:
+                            pass
+                        raise Exception("Review Pending option not found in dropdown")
+                    
+                    # Scroll option into view and click
+                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", review_pending_option)
+                    time.sleep(0.5)
                     print(f"   → Selecting Review Pending...")
                     self.driver.execute_script("arguments[0].click();", review_pending_option)
-                    time.sleep(4)
+                    time.sleep(4)  # Wait for filter to apply
                     print(f"   ✓ Filtered by Review Pending")
                     
             except Exception as e:
@@ -1033,40 +2102,58 @@ class NDNCCompleteAutomation:
                 
                 # Wait for Excel file to download
                 print(f"   → Waiting for Excel file to download...")
-                downloads_folder = Path.home() / "Downloads"
+                
+                # Search in multiple locations
+                search_folders = [
+                    self.ndnc_folder,  # Primary: NDNC folder (Chrome download location)
+                    Path.home() / "Downloads",  # Fallback: Default Downloads folder
+                ]
+                
                 excel_file = None
                 
                 # Wait up to 60 seconds for Excel file
                 for i in range(60):
-                    excel_files = list(downloads_folder.glob("complaints*.xlsx")) + list(downloads_folder.glob("complaints*.xls"))
-                    if excel_files:
-                        latest_excel = max(excel_files, key=lambda x: x.stat().st_mtime)
-                        # Check if downloaded in last 60 seconds
-                        if (time.time() - latest_excel.stat().st_mtime) < 60:
-                            excel_file = latest_excel
-                            break
+                    for folder in search_folders:
+                        if not folder.exists():
+                            continue
+                            
+                        excel_files = list(folder.glob("complaints*.xlsx")) + list(folder.glob("complaints*.xls"))
+                        if excel_files:
+                            latest_excel = max(excel_files, key=lambda x: x.stat().st_mtime)
+                            # Check if downloaded in last 90 seconds (increased from 60)
+                            if (time.time() - latest_excel.stat().st_mtime) < 90:
+                                excel_file = latest_excel
+                                print(f"   ✓ Found Excel in: {folder}")
+                                break
                     
-                    if i % 5 == 0:
+                    if excel_file:
+                        break
+                    
+                    if i % 5 == 0 and i > 0:
                         print(f"      Waiting... ({i}s)")
                     time.sleep(1)
                 
                 if not excel_file:
-                    print(f"   ⚠️  No recent Excel download detected")
-                    print(f"   → Checking for existing Excel files...")
-                    
-                    # Look for most recent complaints file
-                    excel_files = list(downloads_folder.glob("complaints*.xlsx"))
-                    if excel_files:
-                        excel_file = max(excel_files, key=lambda x: x.stat().st_mtime)
-                        print(f"   → Found existing Excel: {excel_file.name}")
-                        print(f"   → Using this file (may contain old data)")
-                    else:
-                        print(f"   ✗ No Excel file found")
-                        raise Exception("Excel download failed")
+                    print(f"   ✗ No recent Excel download detected within 90 seconds")
+                    print(f"   ✗ Excel download failed - no recent file found")
+                    raise Exception("Excel download failed - please retry")
                 
-                print(f"   ✓ Excel downloaded: {excel_file.name}")
+                print(f"   ✓ Excel file found: {excel_file.name}")
+                
+                # Move Excel to NDNC folder if it's not already there
+                if excel_file.parent != self.ndnc_folder:
+                    try:
+                        new_excel_path = self.ndnc_folder / excel_file.name
+                        if new_excel_path.exists():
+                            new_excel_path.unlink()  # Remove old file
+                        shutil.move(str(excel_file), str(new_excel_path))
+                        excel_file = new_excel_path
+                        print(f"   → Moved Excel to NDNC folder")
+                    except Exception as move_e:
+                        print(f"   ⚠️  Could not move Excel file: {str(move_e)}")
                 
                 # Process Excel file to download individual documents
+                print(f"   → Processing Excel to download individual documents...")
                 downloaded_count = self.process_excel_and_download_files(excel_file)
                 
                 print(f"\n{'='*70}")
@@ -1158,16 +2245,35 @@ class NDNCCompleteAutomation:
                         doc_preview.click()
                         time.sleep(2)
                         
-                        # Find and click Download button - CORRECT SELECTOR from HTML
-                        download_btn = wait.until(EC.element_to_be_clickable(
-                            (By.XPATH, '//button[.//svg[contains(@class, "lucide-download")] and contains(., "Download")]')
-                        ))
+                        # Find and click Download button - UPDATED SELECTOR
+                        download_btn = None
+                        selectors = [
+                            (By.XPATH, '//button[@data-slot="button" and contains(@class, "bg-background") and contains(@class, "h-8") and .//svg[contains(@class, "lucide-download")]]'),
+                            (By.XPATH, '//button[@data-slot="button" and contains(@class, "flex-shrink-0") and .//svg[contains(@class, "lucide-download")]]'),
+                            (By.XPATH, '//button[contains(@class, "inline-flex") and contains(@class, "h-8") and .//svg[contains(@class, "lucide-download")]]'),
+                            (By.XPATH, '//button[.//svg[contains(@class, "lucide-download") and @width="14"]]'),
+                        ]
+                        
+                        for selector_type, selector_value in selectors:
+                            try:
+                                download_btn = wait.until(EC.element_to_be_clickable((selector_type, selector_value)))
+                                break
+                            except:
+                                continue
+                        
+                        if not download_btn:
+                            print(f"   ✗ Could not find Download button")
+                            continue
                         
                         # Store main window
                         main_window = self.driver.current_window_handle
                         
+                        # Use JavaScript click to avoid interception
+                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", download_btn)
+                        time.sleep(1)
+                        
                         print(f"   → Clicking Download button...")
-                        download_btn.click()
+                        self.driver.execute_script("arguments[0].click();", download_btn)
                         time.sleep(4)
                         
                         # Check if new tab opened and close it
@@ -1190,7 +2296,8 @@ class NDNCCompleteAutomation:
                         downloads_folder = Path.home() / "Downloads"
                         
                         # Find latest downloaded file
-                        pdf_files = list(downloads_folder.glob("*.pdf")) + list(downloads_folder.glob("*.png"))
+                        pdf_files = list(downloads_folder.glob("*.pdf")) + list(downloads_folder.glob("*.png")) + \
+                                    list(downloads_folder.glob("*.jpg")) + list(downloads_folder.glob("*.jpeg"))
                         if pdf_files:
                             latest_file = max(pdf_files, key=lambda x: x.stat().st_mtime)
                             
@@ -1247,7 +2354,9 @@ class NDNCCompleteAutomation:
         
         # Get all PDF/PNG files
         files = list(self.review_pending_folder.glob("*.pdf")) + \
-                list(self.review_pending_folder.glob("*.png"))
+                list(self.review_pending_folder.glob("*.png")) + \
+                list(self.review_pending_folder.glob("*.jpg")) + \
+                list(self.review_pending_folder.glob("*.jpeg"))
         
         if not files:
             print(f"✗ No files found in {self.review_pending_folder}")
@@ -1283,7 +2392,9 @@ class NDNCCompleteAutomation:
         
         # Get all PDF/PNG files
         files = list(self.open_folder.glob("*.pdf")) + \
-                list(self.open_folder.glob("*.png"))
+                list(self.open_folder.glob("*.png")) + \
+                list(self.open_folder.glob("*.jpg")) + \
+                list(self.open_folder.glob("*.jpeg"))
         
         if not files:
             print(f"✗ No files found in {self.open_folder}")

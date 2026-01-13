@@ -28,13 +28,18 @@ class OpenFolderWatchdog(FileSystemEventHandler):
         if event.is_directory:
             return
         
-        if event.src_path.endswith(('.pdf', '.png')):
+        if event.src_path.endswith(('.pdf', '.png', '.jpg', '.jpeg')):
             with self.lock:
                 # Check if already queued
                 if event.src_path in self.processed_files:
                     return
                 
-                file_type = "PDF" if event.src_path.endswith('.pdf') else "PNG"
+                if event.src_path.endswith('.pdf'):
+                    file_type = "PDF"
+                elif event.src_path.endswith('.png'):
+                    file_type = "PNG"
+                else:
+                    file_type = "JPEG"
                 self.log(f"📄 New {file_type} detected: {os.path.basename(event.src_path)}")
                 
                 self.pending_files.add(event.src_path)
