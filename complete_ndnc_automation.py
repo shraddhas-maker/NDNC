@@ -1476,8 +1476,7 @@ class NDNCCompleteAutomation:
                 return False
             
             # Step 6: Download portal document and perform comprehensive validation
-            # Use the file date for verification
-            if not self.download_and_verify_existing(file_date, phone):
+            if not self.download_verify_and_confirm(local_file_data, phone):
                 print(f"\n❌ SKIPPED - Validation failed (see details above)")
                 self.move_file_to_processed_review(file_path)
                 return False
@@ -1507,15 +1506,9 @@ class NDNCCompleteAutomation:
             print(f"📥 DOWNLOADING PORTAL DOCUMENT FOR VALIDATION")
             print(f"{'─'*70}")
             
-            # Get current URL to extract date
-            current_url = self.driver.current_url
-            url_date_str = self.extract_date_from_url(current_url)
-            
-            if not url_date_str:
-                print(f"   ✗ Cannot extract date from URL: {current_url}")
-                return False
-            
-            print(f"   → URL date: {url_date_str}")
+            # We'll compare with dates from local file data (already extracted)
+            # No need to extract from URL - the portal document itself has the date
+            print(f"   → Using dates from local file for comparison")
             
             # Download the portal document
             print(f"\n   → Clicking document to download...")
@@ -1567,10 +1560,16 @@ class NDNCCompleteAutomation:
             portal_file_data = self.extract_data_from_file(portal_file)
             
             # Perform comprehensive validation
+            # Use the first date from local file as reference for comparison
+            reference_date = local_file_data['all_dates'][0] if local_file_data['all_dates'] else None
+            if not reference_date:
+                print(f"   ✗ No reference date found in local file")
+                return False
+            
             is_valid, reason = self.validate_document_completely(
                 portal_file_data, 
                 expected_phone, 
-                url_date_str
+                reference_date
             )
             
             # Clean up portal file
