@@ -81,6 +81,21 @@ def get_file_counts():
         return {'review_pending': 0, 'open': 0, 'processed': 0, 'processed_review': 0}
 
 
+def check_pause_and_stop():
+    """Check if workflow should pause or stop - returns 'stop', 'pause', or 'continue'"""
+    global automation_state
+    
+    # Check for stop request
+    if automation_state.get('stop_requested', False):
+        return 'stop'
+    
+    # Check for pause request
+    if automation_state.get('paused', False):
+        return 'pause'
+    
+    return 'continue'
+
+
 def run_automation_workflow(workflow_type):
     """Run automation in a separate thread"""
     global automation_state
@@ -100,12 +115,29 @@ def run_automation_workflow(workflow_type):
         automation = NDNCCompleteAutomation(email=EMAIL)
         automation_state['automation'] = automation
         
+        # Inject pause/stop checker
+        automation.check_pause_stop = check_pause_and_stop
+        
         # Start browser
         print("🌐 Starting browser...")
+        
+        # Check for pause/stop before browser start
+        while check_pause_and_stop() == 'pause':
+            time.sleep(0.5)
+        if check_pause_and_stop() == 'stop':
+            return
+            
         automation.start_browser()
         
         # Login
         print("🔐 Logging in...")
+        
+        # Check for pause/stop before login
+        while check_pause_and_stop() == 'pause':
+            time.sleep(0.5)
+        if check_pause_and_stop() == 'stop':
+            return
+            
         if not automation.login():
             print("✗ Login failed. Stopping automation.")
             socketio.emit('error', {'message': 'Login failed. Please check credentials.'})
@@ -115,6 +147,12 @@ def run_automation_workflow(workflow_type):
         
         # Run appropriate workflow
         if workflow_type in ['review_pending', 'both']:
+            # Check for pause/stop before review pending
+            while check_pause_and_stop() == 'pause':
+                time.sleep(0.5)
+            if check_pause_and_stop() == 'stop':
+                return
+                
             review_files = list(REVIEW_PENDING_DIR.glob('*.*')) if REVIEW_PENDING_DIR.exists() else []
             
             if not review_files and workflow_type == 'review_pending':
@@ -129,6 +167,12 @@ def run_automation_workflow(workflow_type):
                 automation.run_review_pending_workflow()
         
         if workflow_type in ['open', 'both']:
+            # Check for pause/stop before open workflow
+            while check_pause_and_stop() == 'pause':
+                time.sleep(0.5)
+            if check_pause_and_stop() == 'stop':
+                return
+                
             open_files = list(OPEN_DIR.glob('*.*')) if OPEN_DIR.exists() else []
             
             if not open_files:
@@ -138,17 +182,19 @@ def run_automation_workflow(workflow_type):
                 print(f"📁 Processing {len(open_files)} Open files...")
                 automation.run_open_workflow()
         
-        # Success
-        print("✅ Workflow completed successfully!")
-        socketio.emit('status', {
-            'running': False,
-            'workflow': None,
-            'message': '✅ Workflow completed successfully!'
-        })
-        
-        # Update stats
-        automation_state['stats']['processed'] += 1
-        socketio.emit('file_counts', get_file_counts())
+        # Success (only if not stopped)
+        if not automation_state.get('stop_requested', False):
+            print("✅ Workflow completed successfully!")
+            socketio.emit('status', {
+                'running': False,
+                'paused': False,
+                'workflow': None,
+                'message': '✅ Workflow completed successfully!'
+            })
+            
+            # Update stats
+            automation_state['stats']['processed'] += 1
+            socketio.emit('file_counts', get_file_counts())
         
     except Exception as e:
         print(f"❌ Error during automation: {str(e)}")
@@ -163,6 +209,8 @@ def run_automation_workflow(workflow_type):
     finally:
         # Cleanup
         automation_state['running'] = False
+        automation_state['paused'] = False
+        automation_state['stop_requested'] = False
         automation_state['workflow'] = None
         
         if automation_state['automation'] and automation_state['automation'].driver:

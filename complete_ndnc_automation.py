@@ -1055,12 +1055,12 @@ class NDNCCompleteAutomation:
             
             print(f"   → Clicking on document preview...")
             self.driver.execute_script("arguments[0].click();", document_preview)
-            time.sleep(3)
+            time.sleep(1)
             
             # Step 2: Wait for modal dialog and click Download button
             print(f"   → Waiting for modal dialog to open...")
             wait.until(EC.presence_of_element_located((By.XPATH, '//div[@role="dialog"][@data-state="open"]')))
-            time.sleep(2)
+            time.sleep(0.5)
             
             print(f"   → Looking for Download button in modal...")
             
@@ -1094,11 +1094,11 @@ class NDNCCompleteAutomation:
             # Use JavaScript click to avoid interception
             print(f"   → Scrolling Download button into view...")
             self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", download_button)
-            time.sleep(1)
+            time.sleep(0.3)
             
             print(f"   → Clicking Download button...")
             self.driver.execute_script("arguments[0].click();", download_button)
-            time.sleep(3)
+            time.sleep(1)
             
             # Step 3: Switch to new tab
             print(f"   → Checking for new tab...")
@@ -1135,14 +1135,14 @@ class NDNCCompleteAutomation:
                         # Switch back to main tab
                         self.driver.switch_to.window(main_tab)
                         print(f"   ✓ Switched back to main tab")
-                        time.sleep(2)
+                        time.sleep(0.5)
                         
                         # Step 6: Click Verify button (inside dialog footer)
                         print(f"   → Looking for Verify button in modal...")
                         
                         # Wait for modal to be visible again
                         wait.until(EC.presence_of_element_located((By.XPATH, '//div[@role="dialog"][@data-state="open"]')))
-                        time.sleep(1)
+                        time.sleep(0.3)
                         
                         verify_selectors = [
                             (By.XPATH, '//div[@role="dialog"]//button[contains(@class, "bg-emerald-600") and .//svg[contains(@class, "lucide-check")]]'),
@@ -1164,7 +1164,7 @@ class NDNCCompleteAutomation:
                         if verify_button:
                             print(f"   → Clicking Verify button...")
                             self.driver.execute_script("arguments[0].click();", verify_button)
-                            time.sleep(2)
+                            time.sleep(1)
                             
                             # Step 7: Handle confirmation dialog "Verify Document"
                             print(f"   → Looking for confirmation dialog...")
@@ -1174,7 +1174,7 @@ class NDNCCompleteAutomation:
                                 ))
                                 print(f"   → Clicking Verify Document confirmation...")
                                 self.driver.execute_script("arguments[0].click();", confirm_verify_button)
-                                time.sleep(3)
+                                time.sleep(1.5)
                                 print(f"   ✅ Document verified successfully!")
                                 return True
                             except Exception as confirm_e:
@@ -1544,8 +1544,8 @@ class NDNCCompleteAutomation:
             # Find the downloaded file
             print(f"\n   → Looking for downloaded file...")
             portal_file = None
-            for _ in range(10):
-                time.sleep(1)
+            for _ in range(15):
+                time.sleep(0.3)
                 files = list(self.ndnc_folder.glob("*.pdf")) + list(self.ndnc_folder.glob("*.png")) + \
                         list(self.ndnc_folder.glob("*.jpg")) + list(self.ndnc_folder.glob("*.jpeg"))
                 recent_files = [f for f in files if (time.time() - f.stat().st_mtime) < 15]
