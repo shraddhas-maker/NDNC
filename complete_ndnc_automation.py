@@ -513,10 +513,26 @@ class NDNCCompleteAutomation:
                 print(f"   → Text sample: {sample[:150]}...")
             
             # Extract ALL phone numbers (10-digit, strip 91 prefix)
+            # Pattern 1: Continuous digits (with optional 91 prefix)
             phone_pattern = r'(?:91)?(\d{10})'
             phone_matches = re.findall(phone_pattern, all_text)
+            
+            # Pattern 2: Formatted phone numbers like (821) 758-8944
+            formatted_pattern = r'\((\d{3})\)\s*(\d{3})-(\d{4})'
+            formatted_matches = re.findall(formatted_pattern, all_text)
+            # Combine the three groups into 10-digit number
+            formatted_phones = [''.join(match) for match in formatted_matches]
+            
+            # Pattern 3: Dash-separated like 821-758-8944
+            dash_pattern = r'(\d{3})-(\d{3})-(\d{4})'
+            dash_matches = re.findall(dash_pattern, all_text)
+            dash_phones = [''.join(match) for match in dash_matches]
+            
+            # Combine all phone numbers
+            all_phone_matches = phone_matches + formatted_phones + dash_phones
+            
             # Filter unique valid phones
-            unique_phones = list(set([p for p in phone_matches if len(p) == 10 and not p.startswith('0000')]))
+            unique_phones = list(set([p for p in all_phone_matches if len(p) == 10 and not p.startswith('0000')]))
             
             # Extract ALL dates
             all_dates = self.extract_all_dates_from_text(all_text)
