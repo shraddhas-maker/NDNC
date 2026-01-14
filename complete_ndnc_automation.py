@@ -2568,7 +2568,7 @@ class NDNCCompleteAutomation:
         
         if not files:
             print(f"✗ No files found in {self.review_pending_folder}")
-            return
+            return {'success': 0, 'failed': 0}
         
         print(f"✓ Found {len(files)} file(s) to process\n")
         
@@ -2591,6 +2591,8 @@ class NDNCCompleteAutomation:
         print(f"✓ Success: {results['success']}")
         print(f"✗ Failed: {results['failed']}")
         print(f"{'='*70}\n")
+        
+        return results
     
     def run_open_workflow(self):
         """Process all Open files"""
@@ -2606,7 +2608,7 @@ class NDNCCompleteAutomation:
         
         if not files:
             print(f"✗ No files found in {self.open_folder}")
-            return
+            return {'success': 0, 'failed': 0}
         
         print(f"✓ Found {len(files)} file(s) to process\n")
         
@@ -2629,6 +2631,8 @@ class NDNCCompleteAutomation:
         print(f"✓ Success: {results['success']}")
         print(f"✗ Failed: {results['failed']}")
         print(f"{'='*70}\n")
+        
+        return results
     
     def run(self, workflow_type='both'):
         """Run the automation"""

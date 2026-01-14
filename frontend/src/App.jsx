@@ -64,6 +64,14 @@ function App() {
       }))
     })
 
+    socket.on('stats', (data) => {
+      setStats(prev => ({
+        ...prev,
+        processed: data.processed || 0,
+        failed: data.failed || 0
+      }))
+    })
+
     socket.on('error', (data) => {
       addLog('Error', `❌ ${data.message}`)
     })

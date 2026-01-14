@@ -145,7 +145,9 @@ def run_automation_workflow(workflow_type):
         
         print("✅ Login successful!")
         
-        # Run appropriate workflow
+        # Run appropriate workflow and collect results
+        total_stats = {'processed': 0, 'failed': 0}
+        
         if workflow_type in ['review_pending', 'both']:
             # Check for pause/stop before review pending
             while check_pause_and_stop() == 'pause':
@@ -161,10 +163,16 @@ def run_automation_workflow(workflow_type):
             elif not review_files and workflow_type == 'both':
                 print("⚠️  No files in 'review_pending' folder. Downloading...")
                 socketio.emit('log', {'message': "⚠️  No files in 'review_pending'. Downloading from dashboard..."})
-                automation.run_review_pending_workflow()
+                results = automation.run_review_pending_workflow()
+                if results:
+                    total_stats['processed'] += results.get('success', 0)
+                    total_stats['failed'] += results.get('failed', 0)
             else:
                 print(f"📋 Processing {len(review_files)} Review Pending files...")
-                automation.run_review_pending_workflow()
+                results = automation.run_review_pending_workflow()
+                if results:
+                    total_stats['processed'] += results.get('success', 0)
+                    total_stats['failed'] += results.get('failed', 0)
         
         if workflow_type in ['open', 'both']:
             # Check for pause/stop before open workflow
@@ -180,20 +188,29 @@ def run_automation_workflow(workflow_type):
                 socketio.emit('log', {'message': "⚠️  No files in 'open' folder."})
             else:
                 print(f"📁 Processing {len(open_files)} Open files...")
-                automation.run_open_workflow()
+                results = automation.run_open_workflow()
+                if results:
+                    total_stats['processed'] += results.get('success', 0)
+                    total_stats['failed'] += results.get('failed', 0)
         
         # Success (only if not stopped)
         if not automation_state.get('stop_requested', False):
             print("✅ Workflow completed successfully!")
+            
+            # Update stats with actual file results
+            automation_state['stats']['processed'] += total_stats.get('processed', 0)
+            automation_state['stats']['failed'] += total_stats.get('failed', 0)
+            
+            # Emit updated status
             socketio.emit('status', {
                 'running': False,
                 'paused': False,
                 'workflow': None,
-                'message': '✅ Workflow completed successfully!'
+                'message': f"✅ Completed! Processed: {total_stats['processed']}, Failed: {total_stats['failed']}"
             })
             
-            # Update stats
-            automation_state['stats']['processed'] += 1
+            # Emit updated stats
+            socketio.emit('stats', automation_state['stats'])
             socketio.emit('file_counts', get_file_counts())
         
     except Exception as e:
@@ -204,7 +221,8 @@ def run_automation_workflow(workflow_type):
             'workflow': None,
             'message': f'❌ Workflow failed: {str(e)}'
         })
-        automation_state['stats']['failed'] += 1
+        # Stats already updated from file processing results
+        socketio.emit('stats', automation_state['stats'])
         
     finally:
         # Cleanup
