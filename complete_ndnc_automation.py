@@ -342,6 +342,35 @@ class NDNCCompleteAutomation:
             # 5. Noise removal
             denoised = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
             processed_images.append(denoised)
+            
+            # ========== ADDITIONAL PREPROCESSING FOR GRAY TEXT ==========
+            # 6. CLAHE (Contrast Limited Adaptive Histogram Equalization) - Excellent for gray/low-contrast text
+            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+            enhanced = clahe.apply(gray)
+            processed_images.append(enhanced)
+            
+            # 7. Lower threshold for capturing lighter gray text
+            _, thresh_low = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY)
+            processed_images.append(thresh_low)
+            
+            # 8. Even lower threshold for very light gray text
+            _, thresh_very_low = cv2.threshold(gray, 60, 255, cv2.THRESH_BINARY)
+            processed_images.append(thresh_very_low)
+            
+            # 9. CLAHE + Binary threshold (best for gray text on white background)
+            _, clahe_thresh = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            processed_images.append(clahe_thresh)
+            
+            # 10. Sharpening to enhance text edges (helps with blurry gray text)
+            kernel_sharpen = np.array([[-1,-1,-1],
+                                       [-1, 9,-1],
+                                       [-1,-1,-1]])
+            sharpened = cv2.filter2D(gray, -1, kernel_sharpen)
+            processed_images.append(sharpened)
+            
+            # 11. CLAHE + Sharpening (combined approach for best gray text capture)
+            sharpened_enhanced = cv2.filter2D(enhanced, -1, kernel_sharpen)
+            processed_images.append(sharpened_enhanced)
         
         return processed_images
     
@@ -441,7 +470,7 @@ class NDNCCompleteAutomation:
                     texts.append(address_bar_text)
                 
                 for config in ocr_configs:
-                    for proc_img in processed_images[:3]:  # Use first 3 preprocessing methods
+                    for proc_img in processed_images[:8]:  # Use first 8 preprocessing methods (includes gray text enhancement)
                         try:
                             text = pytesseract.image_to_string(proc_img, config=config)
                             if len(text.strip()) > 10:
