@@ -1557,124 +1557,228 @@ class NDNCCompleteAutomation:
             print(f"{'─'*70}")
             
             # We'll compare with dates from local file data (already extracted)
-            # No need to extract from URL - the portal document itself has the date
-            print(f"   → Using dates from local file for comparison")
-            
-            # Download the portal document
-            print(f"\n   → Clicking document to download...")
-            wait = WebDriverWait(self.driver, 15)
-            
-            try:
-                # Click to open modal/download
-                document_link = wait.until(EC.element_to_be_clickable(
-                    (By.XPATH, '//a[contains(@href, "/download")]')
-                ))
-                self.driver.execute_script("arguments[0].click();", document_link)
-                time.sleep(3)
-                
-                # Look for download button in modal
-                download_button = wait.until(EC.element_to_be_clickable(
-                    (By.XPATH, '//div[@role="dialog"]//a[contains(@href, "/download")]')
-                ))
-                self.driver.execute_script("arguments[0].click();", download_button)
-                time.sleep(5)
-                
-                print(f"   ✓ Document download initiated")
-                
-            except Exception as e:
-                print(f"   ✗ Download failed: {str(e)}")
-                # Close any open modals before returning
-                self.close_open_modals()
-                return False
-            
-            # Find the downloaded file
-            print(f"\n   → Looking for downloaded file...")
-            portal_file = None
-            for _ in range(15):
-                time.sleep(0.3)
-                files = list(self.ndnc_folder.glob("*.pdf")) + list(self.ndnc_folder.glob("*.png")) + \
-                        list(self.ndnc_folder.glob("*.jpg")) + list(self.ndnc_folder.glob("*.jpeg"))
-                recent_files = [f for f in files if (time.time() - f.stat().st_mtime) < 15]
-                if recent_files:
-                    portal_file = max(recent_files, key=lambda x: x.stat().st_mtime)
-                    break
-            
-            if not portal_file:
-                print(f"   ✗ Downloaded file not found")
-                # Close any open modals before returning
-                self.close_open_modals()
-                return False
-            
-            print(f"   ✓ Found downloaded file: {portal_file.name}")
-            
-            # Perform comprehensive OCR on portal document
-            print(f"\n{'─'*70}")
-            print(f"🔍 PORTAL DOCUMENT OCR EXTRACTION")
-            print(f"{'─'*70}")
-            portal_file_data = self.extract_data_from_file(portal_file)
-            
-            # Perform comprehensive validation
-            # Use the first date from local file as reference for comparison
             reference_date = local_file_data['all_dates'][0] if local_file_data['all_dates'] else None
             if not reference_date:
                 print(f"   ✗ No reference date found in local file")
-                # Close any open modals before returning
                 self.close_open_modals()
                 return False
             
-            is_valid, reason = self.validate_document_completely(
-                portal_file_data, 
-                expected_phone, 
-                reference_date
-            )
+            print(f"   → Using dates from local file for comparison")
             
-            # Clean up portal file
-            try:
-                portal_file.unlink()
-                print(f"   → Cleaned up portal document")
-            except:
-                pass
+            wait = WebDriverWait(self.driver, 15)
             
-            if not is_valid:
-                print(f"\n❌ VALIDATION FAILED: {reason}")
-                # Close any open modals before returning
-                self.close_open_modals()
-                return False
+            # Step 1: Click on the uploaded document preview
+            print(f"   → Looking for uploaded document preview...")
             
-            # All validations passed - click Verify button
-            print(f"\n{'─'*70}")
-            print(f"✅ ALL VALIDATIONS PASSED - CLICKING VERIFY")
-            print(f"{'─'*70}")
+            document_selectors = [
+                (By.XPATH, '//div[@class="text-left"]//div[contains(@class, "font-medium")]'),
+                (By.CSS_SELECTOR, 'div.bg-slate-100.h-24.w-full.rounded.flex.items-center.justify-center.overflow-hidden.cursor-pointer'),
+                (By.XPATH, '//div[contains(@class, "bg-slate-100") and contains(@class, "cursor-pointer")]'),
+            ]
             
-            # Click Verify button
-            try:
-                time.sleep(2)
-                verify_button = wait.until(EC.element_to_be_clickable(
-                    (By.XPATH, '//button[contains(., "Verify") and not(contains(., "Bulk"))]')
-                ))
-                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", verify_button)
-                time.sleep(1)
-                self.driver.execute_script("arguments[0].click();", verify_button)
-                time.sleep(2)
-                
-                print(f"   ✓ Clicked Verify button")
-                
-                # Click confirmation dialog
+            document_preview = None
+            for selector_type, selector_value in document_selectors:
                 try:
-                    confirm_button = WebDriverWait(self.driver, 5).until(
-                        EC.element_to_be_clickable((By.XPATH, '//button[contains(text(), "Verify Document")]'))
+                    document_preview = wait.until(
+                        EC.element_to_be_clickable((selector_type, selector_value))
                     )
-                    self.driver.execute_script("arguments[0].click();", confirm_button)
-                    time.sleep(2)
-                    print(f"   ✓ Confirmed verification")
+                    print(f"   → Found document preview")
+                    break
                 except:
-                    print(f"   → No confirmation dialog (or already confirmed)")
+                    continue
+            
+            if not document_preview:
+                print(f"   ✗ Could not find document preview")
+                self.close_open_modals()
+                return False
+            
+            print(f"   → Clicking on document preview...")
+            self.driver.execute_script("arguments[0].click();", document_preview)
+            time.sleep(2)
+            
+            # Step 2: Wait for modal dialog to appear
+            print(f"   → Waiting for modal dialog to open...")
+            wait.until(EC.presence_of_element_located((By.XPATH, '//div[@role="dialog"][@data-state="open"]')))
+            time.sleep(1)
+            
+            # Step 3: Click the Download button (inside dialog header)
+            print(f"   → Looking for Download button in modal...")
+            
+            download_selectors = [
+                (By.XPATH, '//div[@role="dialog"]//button[contains(text(), "Download")]'),
+                (By.XPATH, '//button[contains(text(), "Download") and @data-slot="button"]'),
+                (By.CSS_SELECTOR, 'div[role="dialog"] button[data-slot="button"]:has(svg.lucide-download)'),
+                (By.XPATH, '//div[@role="dialog"]//button[.//svg[contains(@class, "lucide-download")]]'),
+            ]
+            
+            download_button = None
+            for idx, (selector_type, selector_value) in enumerate(download_selectors):
+                try:
+                    print(f"      Trying selector {idx+1}...")
+                    download_button = wait.until(
+                        EC.element_to_be_clickable((selector_type, selector_value))
+                    )
+                    print(f"   → Found Download button (selector {idx+1})")
+                    break
+                except:
+                    continue
+            
+            if not download_button:
+                print(f"   ✗ Could not find Download button with any selector")
+                self.close_open_modals()
+                return False
+            
+            # Store current tab handle
+            main_tab = self.driver.current_window_handle
+            print(f"   → Current tab handle: {main_tab[:10]}...")
+            
+            # Use JavaScript click to avoid interception
+            print(f"   → Scrolling Download button into view...")
+            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", download_button)
+            time.sleep(0.5)
+            
+            print(f"   → Clicking Download button...")
+            self.driver.execute_script("arguments[0].click();", download_button)
+            time.sleep(2)
+            
+            # Step 4: Switch to new tab
+            print(f"   → Checking for new tab...")
+            all_tabs = self.driver.window_handles
+            
+            if len(all_tabs) > 1:
+                # Switch to the new tab (last one)
+                new_tab = [tab for tab in all_tabs if tab != main_tab][0]
+                self.driver.switch_to.window(new_tab)
+                print(f"   ✓ Switched to new tab")
                 
-                return True
+                # Step 5: Get URL and extract date for reference
+                current_url = self.driver.current_url
+                print(f"   → URL: {current_url}")
                 
-            except Exception as e:
-                print(f"   ✗ Could not click Verify button: {str(e)}")
-                # Close any open modals before returning
+                # Extract date from URL if available
+                url_date = self.extract_date_from_url(current_url)
+                if url_date:
+                    print(f"   → Extracted date from URL: {url_date}")
+                
+                # Step 6: Take screenshot and perform comprehensive validation
+                print(f"\n   → Taking screenshot of portal document for validation...")
+                
+                # Save screenshot as temporary file
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                    tmp_path = Path(tmp_file.name)
+                    screenshot_bytes = self.driver.get_screenshot_as_png()
+                    tmp_file.write(screenshot_bytes)
+                
+                try:
+                    # Perform OCR on portal screenshot
+                    print(f"\n{'─'*70}")
+                    print(f"🔍 PORTAL DOCUMENT OCR EXTRACTION")
+                    print(f"{'─'*70}")
+                    portal_file_data = self.extract_data_from_file(tmp_path)
+                    
+                    # Perform comprehensive validation
+                    is_valid, reason = self.validate_document_completely(
+                        portal_file_data,
+                        expected_phone,
+                        reference_date
+                    )
+                    
+                    # Clean up temp file
+                    try:
+                        tmp_path.unlink()
+                    except:
+                        pass
+                    
+                    if not is_valid:
+                        print(f"\n❌ VALIDATION FAILED: {reason}")
+                        # Close the new tab
+                        self.driver.close()
+                        # Switch back to main tab
+                        self.driver.switch_to.window(main_tab)
+                        self.close_open_modals()
+                        return False
+                    
+                    print(f"   ✓ Comprehensive validation passed!")
+                    
+                except Exception as val_error:
+                    print(f"   ⚠️  Validation error: {str(val_error)}")
+                    # Clean up temp file
+                    try:
+                        tmp_path.unlink()
+                    except:
+                        pass
+                    # Close the new tab
+                    self.driver.close()
+                    # Switch back to main tab
+                    self.driver.switch_to.window(main_tab)
+                    self.close_open_modals()
+                    return False
+                
+                # Close the new tab
+                self.driver.close()
+                
+                # Switch back to main tab
+                self.driver.switch_to.window(main_tab)
+                print(f"   ✓ Switched back to main tab")
+                time.sleep(1)
+                
+                # Step 7: Click Verify button (inside dialog footer)
+                print(f"   → Looking for Verify button in modal...")
+                
+                # Wait for modal to be visible again
+                wait.until(EC.presence_of_element_located((By.XPATH, '//div[@role="dialog"][@data-state="open"]')))
+                time.sleep(0.5)
+                
+                verify_selectors = [
+                    (By.XPATH, '//div[@role="dialog"]//button[contains(@class, "bg-emerald-600") and .//svg[contains(@class, "lucide-check")]]'),
+                    (By.XPATH, '//div[@data-slot="dialog-footer"]//button[contains(@class, "bg-emerald-600")]'),
+                    (By.XPATH, '//div[@role="dialog"]//button[contains(., "Verify") and contains(@class, "bg-emerald-600")]'),
+                ]
+                
+                verify_button = None
+                for selector_type, selector_value in verify_selectors:
+                    try:
+                        verify_button = wait.until(
+                            EC.element_to_be_clickable((selector_type, selector_value))
+                        )
+                        print(f"   → Found Verify button")
+                        break
+                    except:
+                        continue
+                
+                if verify_button:
+                    print(f"   → Clicking Verify button...")
+                    self.driver.execute_script("arguments[0].click();", verify_button)
+                    time.sleep(1)
+                    
+                    # Step 8: Handle confirmation dialog "Verify Document"
+                    print(f"   → Looking for confirmation dialog...")
+                    try:
+                        confirm_verify_button = wait.until(EC.element_to_be_clickable(
+                            (By.XPATH, '//button[contains(@class, "bg-emerald-600") and contains(text(), "Verify Document")]')
+                        ))
+                        print(f"   → Clicking Verify Document confirmation...")
+                        self.driver.execute_script("arguments[0].click();", confirm_verify_button)
+                        time.sleep(2)
+                        print(f"   ✅ Document verified successfully!")
+                        
+                        # Step 9: Close modal by clicking X button
+                        print(f"   → Closing modal dialog...")
+                        self.close_open_modals()
+                        
+                        return True
+                    except Exception as confirm_e:
+                        print(f"   ⚠️  Confirmation dialog not found, verification may have completed")
+                        # Still try to close modal
+                        self.close_open_modals()
+                        return True
+                else:
+                    print(f"   ✗ Could not find Verify button")
+                    self.close_open_modals()
+                    return False
+            else:
+                print(f"   ✗ New tab did not open")
                 self.close_open_modals()
                 return False
             
@@ -1682,11 +1786,21 @@ class NDNCCompleteAutomation:
             print(f"\n✗ Error in download_verify_and_confirm: {str(e)}")
             import traceback
             traceback.print_exc()
-            # Close any open modals before returning
+            
+            # Try to switch back to main tab if we're in a different one
+            try:
+                main_tabs = [handle for handle in self.driver.window_handles]
+                if main_tabs:
+                    self.driver.switch_to.window(main_tabs[0])
+            except:
+                pass
+            
+            # Close any open modals
             try:
                 self.close_open_modals()
             except:
-                pass  # Ignore errors when closing modals
+                pass
+            
             return False
     
     def move_file_to_processed_review(self, file_path: Path) -> bool:
