@@ -260,6 +260,7 @@ class NDNCCompleteAutomation:
         date_str = self.clean_ordinal_date(date_str)
         
         date_formats = [
+            '%Y-%m-%dT%H:%M:%S',  # ISO timestamp: 2025-12-27T13:59:55
             '%d %b %Y',    # 17 Dec 2025 (after cleaning "17th Dec 2025")
             '%d %B %Y',    # 17 December 2025
             '%d-%b-%Y',    # 12-Dec-2025
@@ -293,6 +294,7 @@ class NDNCCompleteAutomation:
         
         # Comprehensive date patterns (more flexible)
         date_patterns = [
+            r'\b(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}:\d{2}',  # ISO timestamp: 2025-12-27T13:59:55.871298Z
             r'\b(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})\b',  # 17th Dec 2025, 3rd Dec 2025
             r'\b(\d{1,2})[-/\s_](\w{3,9})[-/\s_](\d{4})\b',  # 14-Dec-2025, 15 December 2025, 14_Dec_2025
             r'\b(\d{1,2})[-/\s_](\w{3,9})[-/\s_](\d{2})\b',  # 14-Dec-25, 14_Dec_25
@@ -664,6 +666,7 @@ class NDNCCompleteAutomation:
         
         # Try multiple date formats for URL date
         date_formats = [
+            '%Y-%m-%dT%H:%M:%S',  # ISO timestamp: 2025-12-27T13:59:55
             '%d %b %Y',    # 17 Dec 2025
             '%d %B %Y',    # 17 December 2025
             '%d-%b-%Y',    # 12-Dec-2025
@@ -717,6 +720,7 @@ class NDNCCompleteAutomation:
                     
                     # Comprehensive format list with both DD/MM and MM/DD
                     formats_to_try = [
+                        '%Y-%m-%dT%H:%M:%S',               # ISO timestamp: 2025-12-27T13:59:55
                         '%d %b %Y', '%d %B %Y',           # 17 Dec 2025
                         '%d-%b-%Y', '%d-%B-%Y',           # 17-Dec-2025
                         '%d/%m/%Y',                        # 16/07/2025 (DD/MM/YYYY)
@@ -841,6 +845,7 @@ class NDNCCompleteAutomation:
             cleaned_date = self.clean_ordinal_date(expected_date)
             expected_date_obj = None
             date_formats = [
+                '%Y-%m-%dT%H:%M:%S',  # ISO timestamp: 2025-12-27T13:59:55
                 '%d %b %Y',    # 17 Dec 2025
                 '%d %B %Y',    # 17 December 2025
                 '%d-%b-%Y',    # 12-Dec-2025
@@ -994,6 +999,7 @@ class NDNCCompleteAutomation:
             
             # Try multiple date formats
             date_formats = [
+                '%Y-%m-%dT%H:%M:%S',  # ISO timestamp: 2025-12-27T13:59:55
                 '%d %b %Y',    # 17 Dec 2025
                 '%d %B %Y',    # 17 December 2025
                 '%d-%b-%Y',    # 12-Dec-2025
