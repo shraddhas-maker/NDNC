@@ -271,8 +271,10 @@ class NDNCCompleteAutomation:
             '%d.%b.%y',    # 11.Dec.25
             '%d/%m/%Y',    # 11/12/2025
             '%d/%m/%y',    # 11/12/25
-            '%b %d, %Y',   # Jan 2, 2026
-            '%B %d, %Y',   # January 2, 2026
+            '%b %d %Y',    # Jan 05 2026 (without comma)
+            '%B %d %Y',    # January 05 2026 (without comma)
+            '%b %d, %Y',   # Jan 2, 2026 (with comma)
+            '%B %d, %Y',   # January 2, 2026 (with comma)
         ]
         
         for fmt in date_formats:
@@ -657,6 +659,10 @@ class NDNCCompleteAutomation:
             '%d.%b.%y',    # 11.Dec.25
             '%d/%m/%Y',    # 11/12/2025
             '%d/%m/%y',    # 11/12/25
+            '%b %d %Y',    # Jan 05 2026 (without comma)
+            '%B %d %Y',    # January 05 2026 (without comma)
+            '%b %d, %Y',   # Jan 2, 2026 (with comma)
+            '%B %d, %Y',   # January 2, 2026 (with comma)
         ]
         
         for fmt in date_formats:
@@ -706,7 +712,8 @@ class NDNCCompleteAutomation:
                         '%m/%d/%y',                        # 07/16/25 (MM/DD/YY)
                         '%d/%b/%y', '%d-%b-%y', '%d/%b/%Y',  # Month abbreviations
                         '%d.%b.%Y', '%d.%b.%y',           # Dot separators
-                        '%B %d, %Y', '%b %d, %Y',         # Month name formats
+                        '%b %d %Y', '%B %d %Y',           # Jan 05 2026 (without comma)
+                        '%B %d, %Y', '%b %d, %Y',         # Month name formats (with comma)
                     ]
                     
                     for fmt in formats_to_try:
@@ -827,8 +834,10 @@ class NDNCCompleteAutomation:
                 '%d/%b/%Y',    # 11/Dec/2025
                 '%d.%b.%Y',    # 11.Dec.2025
                 '%d.%b.%y',    # 11.Dec.25
-                '%b %d, %Y',   # Jan 2, 2026
-                '%B %d, %Y',   # January 2, 2026
+                '%b %d %Y',    # Jan 05 2026 (without comma)
+                '%B %d %Y',    # January 05 2026 (without comma)
+                '%b %d, %Y',   # Jan 2, 2026 (with comma)
+                '%B %d, %Y',   # January 2, 2026 (with comma)
             ]
             
             for fmt in date_formats:
@@ -980,8 +989,10 @@ class NDNCCompleteAutomation:
                 '%d.%b.%y',    # 11.Dec.25
                 '%d/%m/%Y',    # 11/12/2025
                 '%d/%m/%y',    # 11/12/25
-                '%b %d, %Y',   # Jan 2, 2026
-                '%B %d, %Y',   # January 2, 2026
+                '%b %d %Y',    # Jan 05 2026 (without comma)
+                '%B %d %Y',    # January 05 2026 (without comma)
+                '%b %d, %Y',   # Jan 2, 2026 (with comma)
+                '%B %d, %Y',   # January 2, 2026 (with comma)
             ]
             
             # Parse file_date independently

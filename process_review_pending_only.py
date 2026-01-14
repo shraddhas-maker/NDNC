@@ -241,8 +241,10 @@ class ReviewPendingProcessor:
             '%d.%b.%y',    # 11.Dec.25
             '%d/%m/%Y',    # 11/12/2025
             '%d/%m/%y',    # 11/12/25
-            '%b %d, %Y',   # Jan 2, 2026
-            '%B %d, %Y',   # January 2, 2026
+            '%b %d %Y',    # Jan 05 2026 (without comma)
+            '%B %d %Y',    # January 05 2026 (without comma)
+            '%b %d, %Y',   # Jan 2, 2026 (with comma)
+            '%B %d, %Y',   # January 2, 2026 (with comma)
         ]
         
         for fmt in date_formats:
@@ -621,8 +623,10 @@ class ReviewPendingProcessor:
                 '%d/%b/%Y',    # 11/Dec/2025
                 '%d.%b.%Y',    # 11.Dec.2025
                 '%d.%b.%y',    # 11.Dec.25
-                '%b %d, %Y',   # Jan 2, 2026
-                '%B %d, %Y',   # January 2, 2026
+                '%b %d %Y',    # Jan 05 2026 (without comma)
+                '%B %d %Y',    # January 05 2026 (without comma)
+                '%b %d, %Y',   # Jan 2, 2026 (with comma)
+                '%B %d, %Y',   # January 2, 2026 (with comma)
             ]
             
             for fmt in date_formats:
@@ -791,6 +795,8 @@ class ReviewPendingProcessor:
             '%d %b %Y', '%d %B %Y', '%d-%b-%Y', '%d-%m-%Y',
             '%d/%b/%y', '%d-%b-%y', '%d/%b/%Y', '%d.%b.%Y',
             '%d.%b.%y', '%d/%m/%Y', '%d/%m/%y',
+            '%b %d %Y', '%B %d %Y',     # Jan 05 2026 (without comma)
+            '%b %d, %Y', '%B %d, %Y',   # Jan 2, 2026 (with comma)
         ]
         
         for fmt in date_formats:
@@ -829,7 +835,8 @@ class ReviewPendingProcessor:
                         '%Y-%m-%d', '%d/%m/%y', '%m/%d/%y',
                         '%d/%b/%y', '%d-%b-%y', '%d/%b/%Y',
                         '%d.%b.%Y', '%d.%b.%y',
-                        '%B %d, %Y', '%b %d, %Y',
+                        '%b %d %Y', '%B %d %Y',           # Jan 05 2026 (without comma)
+                        '%B %d, %Y', '%b %d, %Y',         # Month name formats (with comma)
                     ]
                     
                     for fmt in formats_to_try:
@@ -911,8 +918,10 @@ class ReviewPendingProcessor:
                 '%d.%b.%y',    # 11.Dec.25
                 '%d/%m/%Y',    # 11/12/2025
                 '%d/%m/%y',    # 11/12/25
-                '%b %d, %Y',   # Jan 2, 2026
-                '%B %d, %Y',   # January 2, 2026
+                '%b %d %Y',    # Jan 05 2026 (without comma)
+                '%B %d %Y',    # January 05 2026 (without comma)
+                '%b %d, %Y',   # Jan 2, 2026 (with comma)
+                '%B %d, %Y',   # January 2, 2026 (with comma)
             ]
             
             # Parse file_date independently
