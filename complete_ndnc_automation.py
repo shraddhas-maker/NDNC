@@ -34,9 +34,11 @@ class NDNCCompleteAutomation:
         self.open_folder = self.ndnc_folder / "open"
         self.processed_folder = self.ndnc_folder / "processed"
         self.processed_review_folder = self.ndnc_folder / "processed_review"
+        self.not_verified_folder = self.ndnc_folder / "Not_verified"
         
         # Create folders
-        for folder in [self.review_pending_folder, self.open_folder, self.processed_folder, self.processed_review_folder]:
+        for folder in [self.review_pending_folder, self.open_folder, self.processed_folder, 
+                      self.processed_review_folder, self.not_verified_folder]:
             folder.mkdir(parents=True, exist_ok=True)
     
     def start_browser(self):
@@ -1499,7 +1501,7 @@ class NDNCCompleteAutomation:
             phone = self.extract_phone_from_filename(file_path.name)
             if not phone:
                 print(f"❌ SKIPPED - No phone number in filename")
-                self.move_file_to_processed_review(file_path)
+                self.move_file_to_not_verified(file_path)
                 return False
             
             print(f"✓ Phone from filename: {phone}")
@@ -1522,17 +1524,17 @@ class NDNCCompleteAutomation:
                 print(f"\n❌ SKIPPED - Local file has no URL/logo (not authentic)")
                 print(f"   Reason: Document must contain recognizable URL or logo")
                 print(f"   Note: Enhanced OCR attempted but no patterns found")
-                self.move_file_to_processed_review(file_path)
+                self.move_file_to_not_verified(file_path)
                 return False
             
             if phone not in local_file_data.get('all_phones', []):
                 print(f"\n❌ SKIPPED - Phone {phone} not found in local file content")
-                self.move_file_to_processed_review(file_path)
+                self.move_file_to_not_verified(file_path)
                 return False
             
             if not local_file_data.get('all_dates'):
                 print(f"\n❌ SKIPPED - No dates found in local file content")
-                self.move_file_to_processed_review(file_path)
+                self.move_file_to_not_verified(file_path)
                 return False
             
             # Step 4: Navigate and search
@@ -1540,7 +1542,7 @@ class NDNCCompleteAutomation:
             
             if not self.search_complaint(phone):
                 print(f"\n❌ SKIPPED - Phone not found in dashboard")
-                self.move_file_to_processed_review(file_path)
+                self.move_file_to_not_verified(file_path)
                 # Navigate back to All Complaints for next file
                 print(f"\n→ Navigating back to All Complaints page for next file...")
                 self.navigate_to_all_complaints()
@@ -1582,7 +1584,7 @@ class NDNCCompleteAutomation:
             
             if not complaint_found:
                 print(f"\n❌ SKIPPED - No matching complaint found (tried {len(all_dates)} date(s) + filename)")
-                self.move_file_to_processed_review(file_path)
+                self.move_file_to_not_verified(file_path)
                 # Navigate back to All Complaints for next file
                 print(f"\n→ Navigating back to All Complaints page for next file...")
                 self.navigate_to_all_complaints()
@@ -1591,7 +1593,7 @@ class NDNCCompleteAutomation:
             # Step 6: Download portal document and perform comprehensive validation
             if not self.download_verify_and_confirm(local_file_data, phone):
                 print(f"\n❌ SKIPPED - Validation failed (see details above)")
-                self.move_file_to_processed_review(file_path)
+                self.move_file_to_not_verified(file_path)
                 # Navigate back to All Complaints for next file
                 print(f"\n→ Navigating back to All Complaints page for next file...")
                 self.navigate_to_all_complaints()
@@ -1609,7 +1611,7 @@ class NDNCCompleteAutomation:
             print(f"\n✗ Processing error: {str(e)}")
             import traceback
             traceback.print_exc()
-            self.move_file_to_processed_review(file_path)
+            self.move_file_to_not_verified(file_path)
             # Navigate back to All Complaints for next file
             try:
                 print(f"\n→ Navigating back to All Complaints page for next file...")
@@ -1876,7 +1878,7 @@ class NDNCCompleteAutomation:
             return False
     
     def move_file_to_processed_review(self, file_path: Path) -> bool:
-        """Move file to processed_review folder"""
+        """Move file to processed_review folder (successfully verified)"""
         try:
             dest_path = self.processed_review_folder / file_path.name
             if dest_path.exists():
@@ -1885,6 +1887,21 @@ class NDNCCompleteAutomation:
             
             shutil.move(str(file_path), str(dest_path))
             print(f"   → Moved to processed_review: {file_path.name}")
+            return True
+        except Exception as e:
+            print(f"   ⚠️  Could not move file: {str(e)}")
+            return False
+    
+    def move_file_to_not_verified(self, file_path: Path) -> bool:
+        """Move file to Not_verified folder (failed verification or skipped)"""
+        try:
+            dest_path = self.not_verified_folder / file_path.name
+            if dest_path.exists():
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                dest_path = self.not_verified_folder / f"{file_path.stem}_{timestamp}{file_path.suffix}"
+            
+            shutil.move(str(file_path), str(dest_path))
+            print(f"   → Moved to Not_verified: {file_path.name}")
             return True
         except Exception as e:
             print(f"   ⚠️  Could not move file: {str(e)}")

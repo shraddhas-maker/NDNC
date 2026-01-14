@@ -32,10 +32,12 @@ class ReviewPendingProcessor:
         self.ndnc_folder = Path.home() / "Downloads" / "NDNC"
         self.review_pending_folder = self.ndnc_folder / "review_pending"
         self.processed_review_folder = self.ndnc_folder / "processed_review"
+        self.not_verified_folder = self.ndnc_folder / "Not_verified"
         
         # Create folders
         self.review_pending_folder.mkdir(parents=True, exist_ok=True)
         self.processed_review_folder.mkdir(parents=True, exist_ok=True)
+        self.not_verified_folder.mkdir(parents=True, exist_ok=True)
     
     def start_browser(self):
         """Start browser"""
@@ -1450,22 +1452,30 @@ class ReviewPendingProcessor:
             for file_path in files:
                 success = self.process_file(file_path)
                 
-                # Move to processed_review regardless
+                # Move to appropriate folder based on success
                 try:
-                    dest_path = self.processed_review_folder / file_path.name
-                    if dest_path.exists():
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        dest_path = self.processed_review_folder / f"{file_path.stem}_{timestamp}{file_path.suffix}"
-                    
-                    shutil.move(str(file_path), str(dest_path))
-                    print(f"   → Moved to: processed_review/{file_path.name}")
+                    if success:
+                        # Successfully verified - move to processed_review
+                        dest_path = self.processed_review_folder / file_path.name
+                        if dest_path.exists():
+                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            dest_path = self.processed_review_folder / f"{file_path.stem}_{timestamp}{file_path.suffix}"
+                        
+                        shutil.move(str(file_path), str(dest_path))
+                        print(f"   → Moved to: processed_review/{file_path.name}")
+                        results['success'] += 1
+                    else:
+                        # Failed or skipped - move to Not_verified
+                        dest_path = self.not_verified_folder / file_path.name
+                        if dest_path.exists():
+                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            dest_path = self.not_verified_folder / f"{file_path.stem}_{timestamp}{file_path.suffix}"
+                        
+                        shutil.move(str(file_path), str(dest_path))
+                        print(f"   → Moved to: Not_verified/{file_path.name}")
+                        results['failed'] += 1
                 except Exception as e:
                     print(f"   ⚠️  Could not move: {str(e)}")
-                
-                if success:
-                    results['success'] += 1
-                else:
-                    results['failed'] += 1
                 
                 time.sleep(2)
             
