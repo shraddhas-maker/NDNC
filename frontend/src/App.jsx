@@ -174,33 +174,22 @@ function App() {
     }
   }
 
-  const stopWorkflow = async (shutdownServer = false) => {
+  const stopWorkflow = async () => {
     try {
       const response = await fetch(`${API_URL}/api/stop`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ shutdown: shutdownServer })
+        body: JSON.stringify({ shutdown: false })
       })
       if (response.ok) {
         setRunning(false)
         setPaused(false)
-        if (shutdownServer) {
-          addLog('System', '🛑 Server shutting down...')
-          setConnected(false)
-        } else {
-          addLog('System', '⏹️ Workflow stopped')
-        }
+        addLog('System', '⏹️ Workflow stopped')
       }
     } catch (error) {
       addLog('Error', `❌ Failed to stop: ${error.message}`)
-    }
-  }
-
-  const shutdownServer = async () => {
-    if (window.confirm('⚠️ This will stop the workflow AND shut down the API server. Continue?')) {
-      await stopWorkflow(true)
     }
   }
 
@@ -330,33 +319,34 @@ function App() {
               )}
               <button 
                 className="btn btn-secondary" 
-                onClick={() => stopWorkflow(false)}
+                onClick={stopWorkflow}
                 style={{ backgroundColor: '#EF4444', borderColor: '#EF4444' }}
               >
                 <span>⏹️ Stop Workflow</span>
               </button>
-              <button 
-                className="btn btn-secondary" 
-                onClick={shutdownServer}
-                style={{ backgroundColor: '#7C3AED', borderColor: '#7C3AED' }}
-                title="Stop workflow and shut down API server"
-              >
-                <span>🛑 Shutdown Server</span>
-              </button>
             </div>
           )}
           
-          {/* Shutdown button when NOT running */}
-          {!running && connected && (
-            <div style={{ marginTop: '20px' }}>
-              <button 
-                className="btn btn-secondary" 
-                onClick={shutdownServer}
-                style={{ backgroundColor: '#6B7280', borderColor: '#6B7280', fontSize: '14px', padding: '8px 16px' }}
-                title="Shut down API server"
-              >
-                <span>🛑 Shutdown Server</span>
-              </button>
+          {/* Server Status Info when NOT connected */}
+          {!connected && (
+            <div style={{ marginTop: '20px', padding: '20px', backgroundColor: '#FEF3C7', borderRadius: '8px', border: '2px solid #F59E0B' }}>
+              <h4 style={{ margin: '0 0 10px 0', color: '#92400E', fontSize: '16px' }}>
+                🔌 Server Disconnected
+              </h4>
+              <p style={{ margin: '0 0 10px 0', color: '#78350F', fontSize: '14px' }}>
+                The API server is not running. To start it, open a terminal and run:
+              </p>
+              <code style={{ 
+                display: 'block', 
+                padding: '12px', 
+                backgroundColor: '#1F2937', 
+                color: '#10B981', 
+                borderRadius: '6px',
+                fontFamily: 'monospace',
+                fontSize: '14px'
+              }}>
+                ./start_api_server.sh
+              </code>
             </div>
           )}
         </div>
