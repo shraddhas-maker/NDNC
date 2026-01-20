@@ -2,10 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import io from 'socket.io-client'
 import './index.css'
 
-// Configure API URL - Change this for deployment
-const API_URL = import.meta.env.PROD 
-  ? 'http://localhost:5000'  // For production build
-  : 'http://localhost:5000'  // For development
+// Configure API URL - Can be set via environment variable
+// For network deployment, set VITE_API_URL to http://YOUR_IP:5000
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
 function App() {
   const [connected, setConnected] = useState(false)

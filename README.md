@@ -10,21 +10,22 @@
 
 - 🎨 **Modern React UI** - Beautiful, responsive dashboard accessible from any browser
 - 🤖 **Full Automation** - Automated browser control, OCR validation, and file processing
-- 🔒 **Secure** - Each user runs their own backend locally
+- 🌐 **Network Deployment** - Run on your PC, control from any device on your network
 - 📊 **Real-time Monitoring** - Live console output and file statistics
 - 🔄 **Multiple Workflows** - Review Pending, Open complaints, or both together
-- 🌐 **GitHub Pages Hosting** - Free, easy deployment for the frontend
+- 🌍 **GitHub Pages Hosting** - Free, easy deployment for the frontend
 - 🎯 **OCR Validation** - Comprehensive document authenticity checks (URL, logo, phone, date)
+- ⏸️ **Pause/Resume/Stop** - Full control over automation workflows
 
 ## 🎯 Quick Start
 
 ### For Users (Running the System)
 
 1. **Clone the repository:**
-   ```bash
+```bash
    git clone https://github.com/YOUR_USERNAME/watchdog_automation.git
    cd watchdog_automation
-   ```
+```
 
 2. **Install dependencies:**
    ```bash
@@ -32,9 +33,9 @@
    ```
 
 3. **Start the backend:**
-   ```bash
+```bash
    ./start_api_server.sh
-   ```
+```
 
 4. **Open the web UI:**
    - Go to: `https://YOUR_USERNAME.github.io/watchdog_automation/`
@@ -42,7 +43,25 @@
 
 5. **Start automating!** 🎉
 
-### For Administrators (Deployment)
+### For Network Deployment (Let Others Use It)
+
+**Want to run the server on your PC and let others control it from their browsers?**
+
+See **[NETWORK_DEPLOYMENT.md](NETWORK_DEPLOYMENT.md)** for complete network setup guide.
+
+**Quick Setup:**
+```bash
+./get_local_ip.sh           # Get your IP address
+cd frontend
+echo 'VITE_API_URL=http://YOUR_IP:5000' > .env
+npm run build
+cd .. && git add frontend && git commit -m "Network deployment" && git push
+./start_api_server.sh       # Keep running!
+```
+
+Others can now access: `https://YOUR_GITHUB_USERNAME.github.io/watchdog_automation/`
+
+### For Administrators (Initial Deployment)
 
 See **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** for complete deployment instructions.
 
@@ -81,7 +100,7 @@ watchdog_automation/
 │   - WebSocket server              │
 │   - REST endpoints                │
 └──────────────────────────────────┘
-            ↓
+           ↓
 ┌──────────────────────────────────┐
 │   Python Automation               │
 │   - Selenium browser automation   │
