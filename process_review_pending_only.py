@@ -236,6 +236,7 @@ class ReviewPendingProcessor:
             '%Y-%m-%dT%H:%M:%S',  # ISO timestamp: 2025-12-27T13:59:55
             '%b %d, %Y %I:%M:%S %p',  # Dec 22, 2025 5:08:27 PM (Magento)
             '%B %d, %Y %I:%M:%S %p',  # December 22, 2025 5:08:27 PM
+            '%m/%d/%y %I:%M %p',  # 12/23/25 6:58 PM (AJIO)
             '%d %b %Y',    # 17 Dec 2025 (after cleaning "17th Dec 2025")
             '%d %B %Y',    # 17 December 2025
             '%d-%b-%Y',    # 12-Dec-2025
@@ -396,6 +397,7 @@ class ReviewPendingProcessor:
             r'\b(\d{4})-(\d{2})-(\d{2})\s+\d{2}:\d{2}:\d{2}\s+[AP]M',  # 2026-01-06 08:49:47 AM
             r'\b(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}:\d{2}',  # ISO timestamp: 2025-12-27T13:59:55.871298Z
             r'\b(\d{1,2})[-/](\d{1,2})[-/](\d{4})\s+\d{1,2}:\d{2}(?::\d{2})?',  # 11-12-2025 13:50 or 11/12/2025 13:50:05 (CRM)
+            r'\b(\d{1,2})/(\d{1,2})/(\d{2})\s+\d{1,2}:\d{2}\s+[AP]M\b',  # 12/23/25 6:58 PM (AJIO format)
             r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),\s+(\d{4})\s+\d{1,2}:\d{2}:\d{2}\s+[AP]M\b',  # Dec 22, 2025 5:08:27 PM
             r'\b(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})\b',  # 17th Dec 2025, 3rd Dec 2025
             r'\b(\d{1,2})[-/\s_](\w{3,9})[-/\s_](\d{4})\b',  # 14-Dec-2025, 15 December 2025, 14_Dec_2025
@@ -556,7 +558,7 @@ class ReviewPendingProcessor:
                           'flipkart', 'dunzo', 'bigbasket', 'grofers', 'myntra', 'meesho', 'paytm',
                           'phonepe', 'gpay', 'hdfc', 'crm', 'dynamics', 'salesforce', 'persistency', 
                           'persistence', 'shipsy', 'gam', 'portal', 'analytics', 'visualize',
-                          'freshtohome', 'magento',
+                          'freshtohome', 'magento', 'ajio', 'ril', 'reliance',
                           'http://', 'https://', 'www.', 
                           '.com', '.in', '.org', '.net', '.io', '.co', '.ai', '.tech']
             logo_patterns = ['order', 'delivery', 'invoice', 'receipt', 'bill', 'lead', 'policy', 
@@ -672,6 +674,7 @@ class ReviewPendingProcessor:
                 '%Y-%m-%dT%H:%M:%S',  # ISO timestamp: 2025-12-27T13:59:55
                 '%b %d, %Y %I:%M:%S %p',  # Dec 22, 2025 5:08:27 PM (Magento)
                 '%B %d, %Y %I:%M:%S %p',  # December 22, 2025 5:08:27 PM
+                '%m/%d/%y %I:%M %p',  # 12/23/25 6:58 PM (AJIO)
                 '%d %b %Y',    # 17 Dec 2025
                 '%d %B %Y',    # 17 December 2025
                 '%d-%b-%Y',    # 12-Dec-2025
@@ -858,6 +861,7 @@ class ReviewPendingProcessor:
             '%Y-%m-%dT%H:%M:%S',  # ISO timestamp: 2025-12-27T13:59:55
             '%b %d, %Y %I:%M:%S %p',  # Dec 22, 2025 5:08:27 PM (Magento)
             '%B %d, %Y %I:%M:%S %p',  # December 22, 2025 5:08:27 PM
+            '%m/%d/%y %I:%M %p',  # 12/23/25 6:58 PM (AJIO)
             '%d %b %Y', '%d %B %Y', '%d-%b-%Y', '%d-%m-%Y',
             '%d/%b/%y', '%d-%b-%y', '%d/%b/%Y', '%d.%b.%Y',
             '%d.%b.%y', '%d/%m/%Y', '%d/%m/%y',
@@ -900,6 +904,7 @@ class ReviewPendingProcessor:
                         '%Y-%m-%dT%H:%M:%S',               # ISO timestamp: 2025-12-27T13:59:55
                         '%b %d, %Y %I:%M:%S %p',           # Dec 22, 2025 5:08:27 PM (Magento)
                         '%B %d, %Y %I:%M:%S %p',           # December 22, 2025 5:08:27 PM
+                        '%m/%d/%y %I:%M %p',               # 12/23/25 6:58 PM (AJIO)
                         '%d-%m-%Y %H:%M',                  # 11-12-2025 13:50 (CRM format)
                         '%d/%m/%Y %H:%M',                  # 11/12/2025 13:50 (CRM format)
                         '%d-%m-%Y %H:%M:%S',               # 11-12-2025 13:50:05
@@ -985,6 +990,7 @@ class ReviewPendingProcessor:
                 '%Y-%m-%dT%H:%M:%S',  # ISO timestamp: 2025-12-27T13:59:55
                 '%b %d, %Y %I:%M:%S %p',  # Dec 22, 2025 5:08:27 PM (Magento)
                 '%B %d, %Y %I:%M:%S %p',  # December 22, 2025 5:08:27 PM
+                '%m/%d/%y %I:%M %p',  # 12/23/25 6:58 PM (AJIO)
                 '%d %b %Y',    # 17 Dec 2025
                 '%d %B %Y',    # 17 December 2025
                 '%d-%b-%Y',    # 12-Dec-2025
