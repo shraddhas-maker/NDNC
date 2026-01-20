@@ -3,8 +3,13 @@ import io from 'socket.io-client'
 import './index.css'
 
 // Configure API URL - Can be set via environment variable
-// For network deployment, set VITE_API_URL to http://YOUR_IP:5000
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+// For Railway: uses same domain (Flask serves both frontend and API)
+// For local network: set VITE_API_URL to http://YOUR_IP:5000
+// For local dev: falls back to http://localhost:5000
+const API_URL = import.meta.env.VITE_API_URL || 
+  (typeof window !== 'undefined' && window.location.origin.includes('railway.app') 
+    ? window.location.origin 
+    : 'http://localhost:5000')
 
 function App() {
   const [connected, setConnected] = useState(false)
