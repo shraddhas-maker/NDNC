@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Simplified Flask API Server for NDNC Automation
-This server provides REST API and WebSocket endpoints for the React frontend
+Railway-Ready Flask API Server for NDNC Automation
+Serves React frontend and provides REST API + WebSocket endpoints
 """
 import os
 import sys
 import threading
 from pathlib import Path
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import time
@@ -15,8 +15,12 @@ import time
 # Import the automation class
 from complete_ndnc_automation import NDNCCompleteAutomation
 
-# Initialize Flask app
-app = Flask(__name__)
+# Initialize Flask app with static folder pointing to React build
+app = Flask(
+    __name__,
+    static_folder="frontend/dist",
+    static_url_path=""
+)
 app.config['SECRET_KEY'] = 'ndnc-automation-secret-key'
 
 # Enable CORS for React frontend
@@ -367,9 +371,14 @@ def stop_workflow():
     return jsonify({'message': 'Workflow stopped'})
 
 
-@app.route('/', methods=['GET'])
-def index():
-    """Health check endpoint"""
+@app.route('/')
+def serve_react():
+    """Serve React frontend"""
+    return send_from_directory(app.static_folder, 'index.html')
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint for Railway"""
     return jsonify({
         'status': 'ok',
         'service': 'NDNC Automation API',
@@ -408,17 +417,20 @@ def handle_status_request():
 
 
 if __name__ == '__main__':
+    # Get port from environment variable (Railway) or default to 8080
+    port = int(os.environ.get('PORT', 8080))
+    
     print("=" * 60)
-    print("🚀 NDNC Automation API Server")
+    print("🚀 NDNC Automation API Server (Railway Ready)")
     print("=" * 60)
     print(f"📧 Email: {EMAIL}")
     print(f"📂 Base Directory: {BASE_DIR}")
-    print(f"🌐 Server: http://localhost:5000")
-    print(f"🔌 WebSocket: ws://localhost:5000")
+    print(f"🌐 Server: http://0.0.0.0:{port}")
+    print(f"🔌 WebSocket: ws://0.0.0.0:{port}")
     print("=" * 60)
-    print("✅ Server is ready! Connect your React frontend.")
+    print("✅ Server is ready! Serving React frontend + API.")
     print("=" * 60)
     
     # Run the server
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
 
