@@ -27,7 +27,9 @@ app.config['SECRET_KEY'] = 'ndnc-automation-secret-key'
 CORS(app, origins=['*'])
 
 # Initialize SocketIO
-socketio = SocketIO(app, cors_allowed_origins='*')
+# Use 'threading' mode for local development (Python 3.14 compatible)
+# Railway will use 'eventlet' via gunicorn worker
+socketio = SocketIO(app, cors_allowed_origins='*', async_mode='threading')
 
 # Global state
 automation_state = {
