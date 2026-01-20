@@ -269,10 +269,15 @@ class ReviewPendingProcessor:
         # Convert PIL Image to numpy array
         img_array = np.array(image)
         
+        # Upscale image for better OCR on small text (URLs, dates in code blocks)
+        # 2x scaling improves accuracy significantly for small fonts
+        height, width = img_array.shape[:2]
+        img_array = cv2.resize(img_array, (width * 2, height * 2), interpolation=cv2.INTER_CUBIC)
+        
         # Try multiple preprocessing approaches
         processed_images = []
         
-        # 1. Original image
+        # 1. Original (upscaled) image
         processed_images.append(img_array)
         
         # 2. Grayscale conversion
@@ -460,26 +465,43 @@ class ReviewPendingProcessor:
                 all_text = "\n".join(texts)
                 
             else:
-                # Try text extraction first for PDFs
+                # For PDFs: Extract text using BOTH PyPDF2 AND OCR
+                # This ensures we get text from regular content + screenshots/code blocks/API responses
+                
+                # Step 1: Try PyPDF2 text extraction (fast, for regular text)
+                pypdf_text = ""
                 try:
                     with open(file_path, 'rb') as f:
                         pdf_reader = PyPDF2.PdfReader(f)
                         for page in pdf_reader.pages:
-                            all_text += page.extract_text()
+                            pypdf_text += page.extract_text()
+                    print(f"   → PyPDF2 extracted {len(pypdf_text)} characters")
                 except:
                     pass
                 
-                # Use OCR if needed
-                if len(all_text.strip()) < 50:
+                # Step 2: ALWAYS run OCR on ALL pages (to capture screenshots, code blocks, formatted content)
+                ocr_text = ""
+                try:
+                    print(f"   → Running OCR on all PDF pages...")
                     images = convert_from_path(str(file_path), dpi=300)
-                    for image in images:
-                        # Try multiple configs for PDFs too
+                    for page_num, image in enumerate(images, 1):
+                        print(f"      → OCR page {page_num}/{len(images)}...")
+                        # Try multiple configs for better accuracy
+                        page_text = ""
                         for config in ['--psm 6', '--psm 3', '--psm 11']:
                             try:
                                 text = pytesseract.image_to_string(image, config=config)
-                                all_text += text + "\n"
+                                if len(text) > len(page_text):
+                                    page_text = text
                             except:
                                 continue
+                        ocr_text += page_text + "\n"
+                    print(f"   → OCR extracted {len(ocr_text)} characters")
+                except Exception as e:
+                    print(f"   ⚠️  OCR warning: {e}")
+                
+                # Combine both sources (PyPDF2 + OCR)
+                all_text = pypdf_text + "\n" + ocr_text
             
             print(f"   → OCR extracted {len(all_text)} characters")
             
