@@ -234,6 +234,7 @@ class ReviewPendingProcessor:
         date_formats = [
             '%Y-%m-%d %H:%M:%S %p',  # 2026-01-06 08:49:47 AM
             '%Y-%m-%dT%H:%M:%S',  # ISO timestamp: 2025-12-27T13:59:55
+            '%d-%b-%Y %H:%M:%S',  # 30-Jan-2026 12:30:10 (Shaadi)
             '%b %d, %Y %I:%M:%S %p',  # Dec 22, 2025 5:08:27 PM (Magento)
             '%B %d, %Y %I:%M:%S %p',  # December 22, 2025 5:08:27 PM
             '%m/%d/%y %I:%M %p',  # 12/23/25 6:58 PM (AJIO)
@@ -396,6 +397,7 @@ class ReviewPendingProcessor:
         date_patterns = [
             r'\b(\d{4})-(\d{2})-(\d{2})\s+\d{2}:\d{2}:\d{2}\s+[AP]M',  # 2026-01-06 08:49:47 AM
             r'\b(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}:\d{2}',  # ISO timestamp: 2025-12-27T13:59:55.871298Z
+            r'\b(\d{1,2})-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-(\d{4})\s+\d{2}:\d{2}:\d{2}\b',  # 30-Jan-2026 12:30:10 (Shaadi)
             r'\b(\d{1,2})[-/](\d{1,2})[-/](\d{4})\s+\d{1,2}:\d{2}(?::\d{2})?',  # 11-12-2025 13:50 or 11/12/2025 13:50:05 (CRM)
             r'\b(\d{1,2})/(\d{1,2})/(\d{2})\s+\d{1,2}:\d{2}\s+[AP]M\b',  # 12/23/25 6:58 PM (AJIO format)
             r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),\s+(\d{4})\s+\d{1,2}:\d{2}:\d{2}\s+[AP]M\b',  # Dec 22, 2025 5:08:27 PM
@@ -558,12 +560,12 @@ class ReviewPendingProcessor:
                           'flipkart', 'dunzo', 'bigbasket', 'grofers', 'myntra', 'meesho', 'paytm',
                           'phonepe', 'gpay', 'hdfc', 'crm', 'dynamics', 'salesforce', 'persistency', 
                           'persistence', 'shipsy', 'gam', 'portal', 'analytics', 'visualize',
-                          'freshtohome', 'magento', 'ajio', 'ril', 'reliance',
+                          'freshtohome', 'magento', 'ajio', 'ril', 'reliance', 'shaadi', 'matrimony',
                           'http://', 'https://', 'www.', 
                           '.com', '.in', '.org', '.net', '.io', '.co', '.ai', '.tech']
             logo_patterns = ['order', 'delivery', 'invoice', 'receipt', 'bill', 'lead', 'policy', 
                            'hdfc', 'life', 'insurance', 'visualisation', 'dashboard', 'analytics',
-                           'eureka', 'forbes', 'customer', 'service', 'case']
+                           'eureka', 'forbes', 'customer', 'service', 'case', 'member', 'tracking']
             
             found_urls = [url for url in url_patterns if re.search(re.escape(url), all_text, re.IGNORECASE)]
             found_logos = [logo for logo in logo_patterns if re.search(re.escape(logo), all_text, re.IGNORECASE)]
@@ -672,6 +674,7 @@ class ReviewPendingProcessor:
             date_formats = [
                 '%Y-%m-%d %H:%M:%S %p',  # 2026-01-06 08:49:47 AM
                 '%Y-%m-%dT%H:%M:%S',  # ISO timestamp: 2025-12-27T13:59:55
+                '%d-%b-%Y %H:%M:%S',  # 30-Jan-2026 12:30:10 (Shaadi)
                 '%b %d, %Y %I:%M:%S %p',  # Dec 22, 2025 5:08:27 PM (Magento)
                 '%B %d, %Y %I:%M:%S %p',  # December 22, 2025 5:08:27 PM
                 '%m/%d/%y %I:%M %p',  # 12/23/25 6:58 PM (AJIO)
@@ -859,6 +862,7 @@ class ReviewPendingProcessor:
         date_formats = [
             '%Y-%m-%d %H:%M:%S %p',  # 2026-01-06 08:49:47 AM
             '%Y-%m-%dT%H:%M:%S',  # ISO timestamp: 2025-12-27T13:59:55
+            '%d-%b-%Y %H:%M:%S',  # 30-Jan-2026 12:30:10 (Shaadi)
             '%b %d, %Y %I:%M:%S %p',  # Dec 22, 2025 5:08:27 PM (Magento)
             '%B %d, %Y %I:%M:%S %p',  # December 22, 2025 5:08:27 PM
             '%m/%d/%y %I:%M %p',  # 12/23/25 6:58 PM (AJIO)
@@ -902,6 +906,7 @@ class ReviewPendingProcessor:
                     formats_to_try = [
                         '%Y-%m-%d %H:%M:%S %p',            # 2026-01-06 08:49:47 AM
                         '%Y-%m-%dT%H:%M:%S',               # ISO timestamp: 2025-12-27T13:59:55
+                        '%d-%b-%Y %H:%M:%S',               # 30-Jan-2026 12:30:10 (Shaadi)
                         '%b %d, %Y %I:%M:%S %p',           # Dec 22, 2025 5:08:27 PM (Magento)
                         '%B %d, %Y %I:%M:%S %p',           # December 22, 2025 5:08:27 PM
                         '%m/%d/%y %I:%M %p',               # 12/23/25 6:58 PM (AJIO)
@@ -988,6 +993,7 @@ class ReviewPendingProcessor:
             date_formats = [
                 '%Y-%m-%d %H:%M:%S %p',  # 2026-01-06 08:49:47 AM
                 '%Y-%m-%dT%H:%M:%S',  # ISO timestamp: 2025-12-27T13:59:55
+                '%d-%b-%Y %H:%M:%S',  # 30-Jan-2026 12:30:10 (Shaadi)
                 '%b %d, %Y %I:%M:%S %p',  # Dec 22, 2025 5:08:27 PM (Magento)
                 '%B %d, %Y %I:%M:%S %p',  # December 22, 2025 5:08:27 PM
                 '%m/%d/%y %I:%M %p',  # 12/23/25 6:58 PM (AJIO)
