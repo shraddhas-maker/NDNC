@@ -696,10 +696,6 @@ class ReviewPendingProcessor:
             for fmt in date_formats:
                 try:
                     expected_date_obj = datetime.strptime(cleaned_date, fmt)
-            
-            for fmt in date_formats:
-                try:
-                    expected_date_obj = datetime.strptime(cleaned_date, fmt)
                     break
                 except:
                     continue
