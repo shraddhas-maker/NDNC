@@ -1502,6 +1502,11 @@ class ReviewPendingProcessor:
             results = {'success': 0, 'failed': 0}
             
             for file_path in files:
+                # Check for stop flag
+                if hasattr(self, 'check_pause_stop') and self.check_pause_stop() == 'stop':
+                    print("\n⏹️ Workflow stopped by user")
+                    break
+                
                 success = self.process_file(file_path)
                 
                 # Move to appropriate folder based on success

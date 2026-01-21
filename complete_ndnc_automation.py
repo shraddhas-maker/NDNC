@@ -1560,15 +1560,13 @@ class NDNCCompleteAutomation:
             local_file_data = self.extract_data_from_file(file_path)
             
             # Step 3: Validate LOCAL file has minimum required data
+            # Note: We no longer check if phone is in file content - we trust the filename
+            # and search directly on portal using phone from filename
+            
             if not local_file_data.get('has_authenticity'):
                 print(f"\n❌ SKIPPED - Local file has no URL/logo (not authentic)")
                 print(f"   Reason: Document must contain recognizable URL or logo")
                 print(f"   Note: Enhanced OCR attempted but no patterns found")
-                self.move_file_to_not_verified(file_path)
-                return False
-            
-            if phone not in local_file_data.get('all_phones', []):
-                print(f"\n❌ SKIPPED - Phone {phone} not found in local file content")
                 self.move_file_to_not_verified(file_path)
                 return False
             
@@ -2675,6 +2673,11 @@ class NDNCCompleteAutomation:
         results = {'success': 0, 'failed': 0}
         
         for file_path in files:
+            # Check for stop flag
+            if hasattr(self, 'check_pause_stop') and self.check_pause_stop() == 'stop':
+                print("\n⏹️ Workflow stopped by user")
+                break
+            
             success = self.process_review_pending_file(file_path)
             if success:
                 results['success'] += 1
@@ -2715,6 +2718,11 @@ class NDNCCompleteAutomation:
         results = {'success': 0, 'failed': 0}
         
         for file_path in files:
+            # Check for stop flag
+            if hasattr(self, 'check_pause_stop') and self.check_pause_stop() == 'stop':
+                print("\n⏹️ Workflow stopped by user")
+                break
+            
             success = self.process_open_file(file_path)
             if success:
                 results['success'] += 1
