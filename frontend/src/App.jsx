@@ -4,12 +4,9 @@ import './index.css'
 
 // Configure API URL - Can be set via environment variable
 // For Railway: uses same domain (Flask serves both frontend and API)
-// For local network: set VITE_API_URL to http://YOUR_IP:5000
-// For local dev: falls back to http://localhost:5000
+// For local dev/network: uses same origin (port 8080)
 const API_URL = import.meta.env.VITE_API_URL || 
-  (typeof window !== 'undefined' && window.location.origin.includes('railway.app') 
-    ? window.location.origin 
-    : 'http://localhost:5000')
+  (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8080')
 
 function App() {
   const [connected, setConnected] = useState(false)
