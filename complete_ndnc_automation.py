@@ -677,8 +677,59 @@ class NDNCCompleteAutomation:
             validation_results.append(("Authenticity", False, "No URL/logo found in document"))
             all_passed = False
         
-        # 2. Check for phone number
-        print(f"\n2. Phone Number Check:")
+        # 2. Check for masked phone number (REJECT only if exact number NOT found)
+        print(f"\n2. Masked Phone Number Check:")
+        document_text = file_data.get('text', '')
+        # Pattern to detect masked phone numbers like: 98xxxxxx47, 9xxxxxxx7, XXXXXxxxxx5, etc.
+        # This covers various masking styles: x, X, *, •, ●
+        masked_phone_patterns = [
+            r'\d{1,2}[xX*•●]{4,8}\d{1,2}',  # Like: 98xxxxxx47, 9XXXXXXX7, 7****5
+            r'[xX*•●]{4,8}\d{2,4}',          # Like: xxxxxx1234, XXXX5678
+            r'\d{2,4}[xX*•●]{4,8}',          # Like: 98xxxxxx, 9876XXXX
+        ]
+        
+        masked_found = False
+        masked_examples = []
+        for pattern in masked_phone_patterns:
+            matches = re.findall(pattern, document_text)
+            if matches:
+                masked_found = True
+                masked_examples.extend(matches[:3])  # Keep first 3 examples
+        
+        if masked_found:
+            print(f"   ⚠️  Found masked phone number(s): {', '.join(masked_examples[:3])}")
+            
+            # Check if the EXACT unmasked phone number exists in various formats
+            # Formats: 9876543210, +919876543210, +91-9876543210, +91 9876543210, 91-9876543210
+            phone_formats_to_check = [
+                expected_phone,                           # 9876543210
+                f'+91{expected_phone}',                   # +919876543210
+                f'+91-{expected_phone}',                  # +91-9876543210
+                f'+91 {expected_phone}',                  # +91 9876543210
+                f'91{expected_phone}',                    # 919876543210
+                f'91-{expected_phone}',                   # 91-9876543210
+                f'+91-{expected_phone[:5]}-{expected_phone[5:]}',  # +91-98765-43210
+                f'{expected_phone[:5]}-{expected_phone[5:]}',      # 98765-43210
+            ]
+            
+            exact_number_found = any(phone_format in document_text for phone_format in phone_formats_to_check)
+            
+            if exact_number_found:
+                print(f"   ✓ PASSED - Exact unmasked phone number {expected_phone} found in document")
+                print(f"      Note: Document contains both masked and unmasked versions (legitimate)")
+                validation_results.append(("Masked Phone", True, f"Masked present but exact number found"))
+            else:
+                print(f"   ✗ FAILED - Only masked phone numbers found, exact number NOT visible")
+                print(f"      Reason: Phone numbers are masked and exact number is not clearly visible")
+                print(f"      Expected to find: {expected_phone} or +91-{expected_phone}")
+                validation_results.append(("Masked Phone", False, f"Only masked numbers found: {', '.join(masked_examples[:3])}"))
+                all_passed = False
+        else:
+            print(f"   ✓ PASSED - No masked phone numbers detected")
+            validation_results.append(("Masked Phone", True, "No masking detected"))
+        
+        # 3. Check for phone number
+        print(f"\n3. Phone Number Check:")
         found_phones = file_data.get('all_phones', [])
         if expected_phone in found_phones:
             print(f"   ✓ PASSED - Phone {expected_phone} found in document")
@@ -693,8 +744,8 @@ class NDNCCompleteAutomation:
             validation_results.append(("Phone", False, f"Expected {expected_phone}, found {found_phones}"))
             all_passed = False
         
-        # 3. Check for date within 6 months of URL date
-        print(f"\n3. Date Validation (within 6 months of URL date):")
+        # 4. Check for date within 6 months of URL date
+        print(f"\n4. Date Validation (within 6 months of URL date):")
         url_date_obj = None
         
         # Clean ordinal suffixes from URL date
