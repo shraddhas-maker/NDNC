@@ -541,8 +541,27 @@ class ReviewPendingProcessor:
             plus_pattern = r'\+91-?(\d{10})'
             plus_matches = re.findall(plus_pattern, all_text)
             
+            # Pattern 5: HubSpot format like +91-97324-26168 (with dash in middle)
+            hubspot_pattern = r'\+91-(\d{5})-(\d{5})'
+            hubspot_matches = re.findall(hubspot_pattern, all_text)
+            hubspot_phones = [''.join(match) for match in hubspot_matches]
+            
+            # Pattern 6: "Call on" format like "Call on 9663251245"
+            call_on_pattern = r'Call\s+on\s+(\d{10})'
+            call_on_matches = re.findall(call_on_pattern, all_text, re.IGNORECASE)
+            
+            # Pattern 7: Phone number in parentheses like "(Phone number: 8527620750)"
+            phone_label_pattern = r'(?:Phone\s+number|Mobile|Contact)[\s:]+(\d{10})'
+            phone_label_matches = re.findall(phone_label_pattern, all_text, re.IGNORECASE)
+            
+            # Pattern 8: Indian format with country code and spaces like +91 97324 26168
+            space_pattern = r'\+91\s+(\d{5})\s+(\d{5})'
+            space_matches = re.findall(space_pattern, all_text)
+            space_phones = [''.join(match) for match in space_matches]
+            
             # Combine all phone numbers
-            all_phone_matches = phone_matches + formatted_phones + dash_phones + plus_matches
+            all_phone_matches = (phone_matches + formatted_phones + dash_phones + plus_matches + 
+                                hubspot_phones + call_on_matches + phone_label_matches + space_phones)
             
             # Filter unique valid phones
             unique_phones = list(set([p for p in all_phone_matches if len(p) == 10 and not p.startswith('0000')]))
