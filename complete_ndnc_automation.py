@@ -582,9 +582,31 @@ class NDNCCompleteAutomation:
             space_matches = re.findall(space_pattern, all_text)
             space_phones = [''.join(match) for match in space_matches]
             
+            # Pattern 9: Primary Phone / Delivery tracking format like "Primary Phone: 8333001396"
+            primary_phone_pattern = r'(?:Primary\s+Phone|Delivery\s+Phone|Customer\s+Phone)[\s:]+(\d{10})'
+            primary_phone_matches = re.findall(primary_phone_pattern, all_text, re.IGNORECASE)
+            
+            # Pattern 10: E-commerce order tracking with phone in order ID (like Smart Assist, Flipkart)
+            # Format: DD436660473602461100000 where last 10 digits might be phone
+            order_id_pattern = r'(?:Order|Tracking|AWB)[\s#:]*[A-Z]*(\d{20,})'
+            order_id_matches = re.findall(order_id_pattern, all_text, re.IGNORECASE)
+            order_id_phones = []
+            for order_id in order_id_matches:
+                # Extract last 10 digits if order ID is long enough
+                if len(order_id) >= 10:
+                    potential_phone = order_id[-10:]
+                    # Check if it looks like a valid Indian phone (starts with 6-9)
+                    if potential_phone[0] in '6789':
+                        order_id_phones.append(potential_phone)
+            
+            # Pattern 11: Delivered to / Shipped to with phone like "Delivered to: Aravind 8333001396"
+            delivered_to_pattern = r'(?:Delivered\s+to|Shipped\s+to|Recipient)[\s:]+[A-Za-z\s]+(\d{10})'
+            delivered_to_matches = re.findall(delivered_to_pattern, all_text, re.IGNORECASE)
+            
             # Combine all phone numbers
             all_phone_matches = (phone_matches + formatted_phones + dash_phones + plus_matches + 
-                                hubspot_phones + call_on_matches + phone_label_matches + space_phones)
+                                hubspot_phones + call_on_matches + phone_label_matches + space_phones +
+                                primary_phone_matches + order_id_phones + delivered_to_matches)
             
             # Filter unique valid phones
             unique_phones = list(set([p for p in all_phone_matches if len(p) == 10 and not p.startswith('0000')]))
