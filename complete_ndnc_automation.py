@@ -55,7 +55,12 @@ class NDNCCompleteAutomation:
         }
         options.add_experimental_option("prefs", prefs)
         
-        self.driver = webdriver.Chrome(options=options)
+        # Use ChromeDriver 145 from user's local bin
+        from selenium.webdriver.chrome.service import Service
+        chromedriver_path = os.path.expanduser("~/.local/bin/chromedriver")
+        service = Service(executable_path=chromedriver_path)
+        self.driver = webdriver.Chrome(service=service, options=options)
+        
         time.sleep(1)
         self.driver.maximize_window()
         time.sleep(0.5)

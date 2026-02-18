@@ -43,7 +43,13 @@ class ReviewPendingProcessor:
         """Start browser"""
         print("→ Starting Chrome browser...")
         options = webdriver.ChromeOptions()
-        self.driver = webdriver.Chrome(options=options)
+        
+        # Use ChromeDriver 145 from user's local bin
+        from selenium.webdriver.chrome.service import Service
+        chromedriver_path = os.path.expanduser("~/.local/bin/chromedriver")
+        service = Service(executable_path=chromedriver_path)
+        self.driver = webdriver.Chrome(service=service, options=options)
+        
         time.sleep(2)
         self.driver.maximize_window()
         time.sleep(1)
