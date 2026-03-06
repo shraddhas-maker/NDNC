@@ -2878,7 +2878,7 @@ def main():
     print(f"🤖 NDNC Complete Automation")
     print(f"{'='*70}\n")
     
-    EMAIL = "shraddha.s@exotel.com"
+    EMAIL = "ndnc@exotel.com"
     
     # Check for command line argument
     if len(sys.argv) > 1:

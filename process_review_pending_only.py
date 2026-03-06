@@ -1662,7 +1662,7 @@ class ReviewPendingProcessor:
 
 def main():
     """Main entry point"""
-    EMAIL = "shraddha.s@exotel.com"
+    EMAIL = "ndnc@exotel.com"
     
     processor = ReviewPendingProcessor(email=EMAIL)
     processor.run()

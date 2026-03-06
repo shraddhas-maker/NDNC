@@ -45,7 +45,7 @@ automation_state = {
 }
 
 # Email configuration - Update this with your email
-EMAIL = "shraddha.s@exotel.com"
+EMAIL = "ndnc@exotel.com"
 
 # Folder paths
 BASE_DIR = Path.home() / "Downloads" / "NDNC"
